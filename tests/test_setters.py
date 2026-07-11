@@ -47,7 +47,7 @@ async def test_get_cv_round_trip(sca_server):
 async def test_unknown_setter_raises(sca_server):
     server, _ = sca_server
     with pytest.raises(AttributeError):
-        server.objects["sca1"].setNoSuchVariable
+        _ = server.objects["sca1"].setNoSuchVariable
 
 
 class _Recorder:

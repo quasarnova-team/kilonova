@@ -14,11 +14,12 @@ from microquasar.errors import DesignError
 
 
 def _parse_bool(text: str) -> bool:
-    if text in ("true", "1"):
+    # Design initialValue uses C++ literals (OpcUa_True), config.xml uses xsd:boolean
+    if text in ("true", "1", "OpcUa_True"):
         return True
-    if text in ("false", "0"):
+    if text in ("false", "0", "OpcUa_False"):
         return False
-    raise ValueError(f"not an xsd:boolean: {text!r}")
+    raise ValueError(f"not a quasar boolean: {text!r}")
 
 
 # quasar Design dataType -> (VariantType, parser for XML string values)

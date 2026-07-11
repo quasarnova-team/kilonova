@@ -32,6 +32,13 @@ _X = f"{{{NODESET_NS}}}"
 _XSD_DEFAULTS = {"DataType": "i=24", "ValueRank": "-1", "AccessLevel": "1"}
 
 
+def _plain_nodeid(node_id) -> ua.NodeId:
+    """Normalize NodeId/ExpandedNodeId (asyncua version differences) to ua.NodeId."""
+    if hasattr(node_id, "to_nodeid"):
+        return node_id.to_nodeid()
+    return ua.NodeId(node_id.Identifier, node_id.NamespaceIndex)
+
+
 def _nodeid_str(node_id: ua.NodeId, explicit_ns0: bool = False) -> str:
     kind = {
         ua.NodeIdType.Numeric: "i",
@@ -74,7 +81,7 @@ async def _walk(client: Client, node, namespace_index: int, dumped: dict) -> Non
         includesubtypes=True,
     )
     for child_ref in children:
-        child_id = child_ref.NodeId.to_nodeid()
+        child_id = _plain_nodeid(child_ref.NodeId)
         child_key = _nodeid_str(child_id, explicit_ns0=True)
         if child_key in dumped:
             continue
@@ -82,9 +89,10 @@ async def _walk(client: Client, node, namespace_index: int, dumped: dict) -> Non
         if child_id.NamespaceIndex == namespace_index:
             dumped[child_key] = await _dump_node(client, child, child_ref)
         # descend regardless: ns-2 nodes may hang below ns-0 folders
-        if child_ref.NodeClass in (ua.NodeClass.Object, ua.NodeClass.Variable):
-            if child_id.NamespaceIndex == namespace_index or _is_folderish(child_id):
-                await _walk(client, child, namespace_index, dumped)
+        if child_ref.NodeClass in (
+            ua.NodeClass.Object, ua.NodeClass.Variable, ua.NodeClass.Method
+        ) and (child_id.NamespaceIndex == namespace_index or _is_folderish(child_id)):
+            await _walk(client, child, namespace_index, dumped)
 
 
 def _is_folderish(node_id: ua.NodeId) -> bool:
@@ -103,9 +111,8 @@ async def _dump_node(client: Client, node, ref_description) -> _DumpedNode:
     for ref in await node.get_references(direction=ua.BrowseDirection.Forward):
         entry.references.append(
             (
-                _nodeid_str(ua.NodeId(ref.ReferenceTypeId.Identifier,
-                                      ref.ReferenceTypeId.NamespaceIndex), explicit_ns0=True),
-                _nodeid_str(ref.NodeId.to_nodeid(), explicit_ns0=True),
+                _nodeid_str(_plain_nodeid(ref.ReferenceTypeId), explicit_ns0=True),
+                _nodeid_str(_plain_nodeid(ref.NodeId), explicit_ns0=True),
             )
         )
     if ref_description.NodeClass == ua.NodeClass.Variable:

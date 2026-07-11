@@ -22,13 +22,13 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 
 | # | Feature | UX test gate | Status |
 |---|---------|--------------|--------|
-| M0 | Scaffold: pyproject/uv, ruff, pytest, git | `uv run pytest` runs | in progress |
-| M1 | Design layer: typed `Design.xml` parser | parses all quasar CI test-case designs | pending |
-| M2 | Server core on asyncua: boot, ns=2, ObjectTypes | Client connects, browses, finds types | pending |
-| M3 | Config instantiation: recursive objects, dotted string NodeIds | Client resolves exact NodeIds from config tree | pending |
-| M4 | Cache variables: DataType/ValueRank/AccessLevel/initialValue+Status | Client reads every attribute + value + status | pending |
-| M5 | MilkyWay parity: `set_cv`, generated `setXxx` setters, live demo | Client subscribes, sees ticking value | pending |
-| M6 | Conformance runner + dumper (uasak_dump equivalent) | parity table over quasar CI cases | pending |
+| M0 | Scaffold: pyproject/uv, ruff, pytest, git | `uv run pytest` runs | done |
+| M1 | Design layer: typed `Design.xml` parser | parses all quasar CI test-case designs | done |
+| M2 | Server core on asyncua: boot, ns=2, ObjectTypes | Client connects, browses, finds types | done |
+| M3 | Config instantiation: recursive objects, dotted string NodeIds | Client resolves exact NodeIds from config tree | done |
+| M4 | Cache variables: DataType/ValueRank/AccessLevel/initialValue+Status | Client reads every attribute + value + status | done |
+| M5 | MilkyWay parity: `set_cv`, generated `setXxx` setters, live demo | Client subscribes, sees ticking value | done |
+| M6 | Conformance runner + dumper (uasak_dump equivalent) | parity table over quasar CI cases | done |
 | M7 | Methods: nodes + real async handlers (decorator API) | Client calls method, gets result | pending |
 | M8 | Source variables: async read/write callbacks | Client read triggers user coroutine | pending |
 | M9 | CalculatedVariables (safe formula eval) | Client reads computed value | pending |
@@ -39,7 +39,25 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 ## Current parity table (M6 gate, StandardMetaData ignored)
 
 Run `uv run pytest tests/conformance -v` with a quasar checkout next door.
-Populated by the conformance runner once M6 lands — no claims before the tests pass.
+As of M6 (all verified by `pytest tests/conformance`, 2026-07-11):
+
+| quasar CI case | verdict |
+|----------------|---------|
+| default_design | PASS |
+| methods | PASS |
+| async_methods | PASS |
+| cache_variables | PASS |
+| config_entries | PASS |
+| recurrent_hasobjects | PASS |
+| single_variable_node | PASS |
+| instantiation_from_design | PASS |
+| config_restrictions | PASS |
+| defaulted_instance_name | PASS |
+| source_variables | xfail (M8) |
+| calculated_variables | xfail (M9) |
+
+Method *nodes* (incl. `.args`/`.return_values` argument properties) are at parity as part of
+M6; callable handlers remain the M7 deliverable.
 
 ## Design decisions (2026 rewrite, vs the 2021 MilkyWay prototype)
 

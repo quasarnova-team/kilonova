@@ -15,7 +15,14 @@ from asyncua.common.node import Node
 
 from microquasar import oracle
 from microquasar.config import Instance
-from microquasar.design import CacheVariable, Design, QuasarClass
+from microquasar.design import (
+    CacheVariable,
+    ConfigEntry,
+    Design,
+    Method,
+    MethodArgument,
+    QuasarClass,
+)
 from microquasar.errors import ConfigurationError, DesignError
 from microquasar.objects import QuasarObject
 
@@ -97,14 +104,10 @@ class AddressSpaceBuilder:
             for cv in klass.cache_variables:
                 var_node = await self._add_cache_variable(node, address, cv, instance)
                 quasar_object.cache_variables[cv.name] = var_node
+            for entry in klass.config_entries:
+                await self._add_config_entry(node, address, entry, instance)
             for method in klass.methods:
-                await node.add_method(
-                    ua.NodeId(f"{address}.{method.name}", self._ns),
-                    ua.QualifiedName(method.name, self._ns),
-                    _not_implemented_method,
-                    [],
-                    [],
-                )
+                await self._add_method(node, address, method)
 
         self.objects[address] = quasar_object
 
@@ -150,8 +153,86 @@ class AddressSpaceBuilder:
         await self._finalize_variable(node, cv, data_value)
         return node
 
+    async def _add_config_entry(
+        self, object_node: Node, parent_address: str, entry: ConfigEntry, instance: Instance
+    ) -> None:
+        """Config entries surface as read-only properties, like C++ quasar exposes them."""
+        if entry.is_array:
+            raw_text = instance.array_values.get(entry.name)
+            value = (
+                oracle.parse_design_array(raw_text, entry.data_type)
+                if entry.name in instance.array_values
+                else None
+            )
+        else:
+            raw = instance.attributes.get(entry.name)
+            value = oracle.parse_design_value(raw, entry.data_type) if raw is not None else None
+        variant = oracle.make_variant(value, entry.data_type, entry.is_array)
+        node = await object_node.add_property(
+            ua.NodeId(f"{parent_address}.{entry.name}", self._ns),
+            ua.QualifiedName(entry.name, self._ns),
+            variant,
+            datatype=oracle.data_type_node_id(entry.data_type),
+        )
+        await self._write_value_rank(node, self._value_rank(entry.is_array, entry.data_type))
+
+    async def _add_method(self, object_node: Node, parent_address: str, method: Method) -> None:
+        address = f"{parent_address}.{method.name}"
+        method_node = await object_node.add_method(
+            ua.NodeId(address, self._ns),
+            ua.QualifiedName(method.name, self._ns),
+            _not_implemented_method,
+        )
+        # quasar publishes argument properties at <method>.args / <method>.return_values
+        if method.arguments:
+            await self._add_argument_property(
+                method_node, f"{address}.args", "InputArguments", method.arguments
+            )
+        if method.return_values:
+            await self._add_argument_property(
+                method_node, f"{address}.return_values", "OutputArguments", method.return_values
+            )
+
+    async def _add_argument_property(
+        self, method_node: Node, address: str, browse_name: str,
+        arguments: tuple[MethodArgument, ...],
+    ) -> None:
+        value = [
+            ua.Argument(
+                Name=arg.name,
+                DataType=oracle.data_type_node_id(arg.data_type),
+                ValueRank=self._value_rank(arg.is_array, arg.data_type),
+                ArrayDimensions=[],
+                Description=ua.LocalizedText(""),
+            )
+            for arg in arguments
+        ]
+        node = await method_node.add_property(
+            ua.NodeId(address, self._ns),
+            ua.QualifiedName(browse_name, 0),
+            value,
+            datatype=ua.NodeId(ua.ObjectIds.Argument),
+        )
+        await self._write_value_rank(node, 1)
+
+    @staticmethod
+    def _value_rank(is_array: bool, data_type: str) -> int:
+        """quasar semantics: arrays are one-dimensional; UaVariant is ScalarOrOneDimension."""
+        if is_array:
+            return 1
+        if data_type == "UaVariant":
+            return -3
+        return -1
+
+    async def _write_value_rank(self, node: Node, rank: int) -> None:
+        await self._server.write_attribute_value(
+            node.nodeid,
+            ua.DataValue(ua.Variant(rank, ua.VariantType.Int32)),
+            ua.AttributeIds.ValueRank,
+        )
+
     async def _finalize_variable(self, node: Node, cv: CacheVariable, dv: ua.DataValue) -> None:
-        rank = 1 if cv.is_array else -1
+        rank = self._value_rank(cv.is_array, cv.data_type)
         await self._server.write_attribute_value(
             node.nodeid,
             ua.DataValue(ua.Variant(rank, ua.VariantType.Int32)),

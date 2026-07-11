@@ -12,7 +12,6 @@ from microquasar.design import QuasarClass
 
 if typing.TYPE_CHECKING:
     import asyncua
-
     from asyncua.common.node import Node
 
 

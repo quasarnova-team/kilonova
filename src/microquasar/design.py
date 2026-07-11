@@ -51,10 +51,21 @@ class ConfigEntry:
 
 
 @dataclass(frozen=True)
-class Method:
-    """A d:method. Only the node identity for now; argument support comes with handlers."""
+class MethodArgument:
+    """A d:argument or d:returnvalue of a method."""
 
     name: str
+    data_type: str
+    is_array: bool = False
+
+
+@dataclass(frozen=True)
+class Method:
+    """A d:method with its input arguments and return values."""
+
+    name: str
+    arguments: tuple[MethodArgument, ...] = ()
+    return_values: tuple[MethodArgument, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -178,7 +189,7 @@ def _parse_class(element: etree._Element) -> QuasarClass:
                 )
             )
         elif tag == "method":
-            methods.append(Method(name=child.get("name")))
+            methods.append(_parse_method(child))
         elif tag == "hasobjects":
             has_objects.append(_parse_has_objects(child))
         elif tag == "devicelogic":
@@ -217,6 +228,30 @@ def _parse_cache_variable(element: etree._Element) -> CacheVariable:
         initial_value=element.get("initialValue"),
         initial_status=element.get("initialStatus"),
         is_array=is_array,
+    )
+
+
+def _parse_method(element: etree._Element) -> Method:
+    arguments: list[MethodArgument] = []
+    return_values: list[MethodArgument] = []
+    for child in element:
+        if not isinstance(child.tag, str):
+            continue
+        tag = _local(child.tag)
+        if tag not in ("argument", "returnvalue"):
+            continue
+        argument = MethodArgument(
+            name=child.get("name"),
+            data_type=child.get("dataType"),
+            is_array=any(
+                isinstance(g.tag, str) and _local(g.tag) == "array" for g in child
+            ),
+        )
+        (arguments if tag == "argument" else return_values).append(argument)
+    return Method(
+        name=element.get("name"),
+        arguments=tuple(arguments),
+        return_values=tuple(return_values),
     )
 
 

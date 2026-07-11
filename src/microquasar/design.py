@@ -33,6 +33,19 @@ def _required(element: etree._Element, attribute: str) -> str:
 
 
 @dataclass(frozen=True)
+class Restrictions:
+    """A d:configRestriction — value constraints the configuration must satisfy,
+    mirroring what quasar's generated Configuration.xsd enforces."""
+
+    enumeration: tuple[str, ...] = ()
+    pattern: str | None = None
+    min_inclusive: str | None = None
+    max_inclusive: str | None = None
+    min_exclusive: str | None = None
+    max_exclusive: str | None = None
+
+
+@dataclass(frozen=True)
 class CacheVariable:
     """A d:cachevariable — an OPC UA variable backed by an in-server cache."""
 
@@ -45,6 +58,7 @@ class CacheVariable:
     initial_status: str | None = None
     default_config_initializer_value: str | None = None
     is_array: bool = False
+    restrictions: Restrictions | None = None
 
     @property
     def is_writable(self) -> bool:
@@ -60,6 +74,7 @@ class ConfigEntry:
     data_type: str
     is_key: bool = False
     is_array: bool = False
+    restrictions: Restrictions | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +129,8 @@ class HasObjects:
     class_name: str
     instantiate_using: str  # configuration | design
     design_instance_names: tuple[str, ...] = ()
+    min_occurs: int = 0
+    max_occurs: int | None = None  # None = unbounded
 
 
 @dataclass(frozen=True)
@@ -212,6 +229,7 @@ def _parse_class(element: etree._Element) -> QuasarClass:
                     is_key=child.get("isKey") == "true",
                     is_array=any(_local(g.tag) == "array" for g in child
                                  if isinstance(g.tag, str)),
+                    restrictions=_parse_restrictions(child),
                 )
             )
         elif tag == "method":
@@ -265,7 +283,43 @@ def _parse_cache_variable(element: etree._Element) -> CacheVariable:
         initial_status=element.get("initialStatus"),
         default_config_initializer_value=element.get("defaultConfigInitializerValue"),
         is_array=is_array,
+        restrictions=_parse_restrictions(element),
     )
+
+
+def _parse_restrictions(element: etree._Element) -> Restrictions | None:
+    for child in element:
+        if isinstance(child.tag, str) and _local(child.tag) == "configRestriction":
+            enumeration: list[str] = []
+            pattern = None
+            bounds: dict[str, str | None] = {}
+            for restriction in child:
+                if not isinstance(restriction.tag, str):
+                    continue
+                kind = _local(restriction.tag)
+                if kind == "restrictionByEnumeration":
+                    enumeration.extend(
+                        value.get("value")
+                        for value in restriction
+                        if isinstance(value.tag, str)
+                        and _local(value.tag) == "enumerationValue"
+                    )
+                elif kind == "restrictionByPattern":
+                    pattern = restriction.get("pattern")
+                elif kind == "restrictionByBounds":
+                    for bound in ("minInclusive", "maxInclusive",
+                                  "minExclusive", "maxExclusive"):
+                        if restriction.get(bound) is not None:
+                            bounds[bound] = restriction.get(bound)
+            return Restrictions(
+                enumeration=tuple(enumeration),
+                pattern=pattern,
+                min_inclusive=bounds.get("minInclusive"),
+                max_inclusive=bounds.get("maxInclusive"),
+                min_exclusive=bounds.get("minExclusive"),
+                max_exclusive=bounds.get("maxExclusive"),
+            )
+    return None
 
 
 def _parse_method(element: etree._Element) -> Method:
@@ -301,10 +355,13 @@ def _parse_has_objects(element: etree._Element) -> HasObjects:
             for child in element
             if isinstance(child.tag, str) and _local(child.tag) == "object"
         )
+    max_occurs_text = element.get("maxOccurs")
     return HasObjects(
         class_name=_required(element, "class"),
         instantiate_using=instantiate_using,
         design_instance_names=design_names,
+        min_occurs=int(element.get("minOccurs", 0)),
+        max_occurs=None if max_occurs_text in (None, "unbounded") else int(max_occurs_text),
     )
 
 

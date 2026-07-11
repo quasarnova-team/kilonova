@@ -6,6 +6,7 @@ for the C++ code generator.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 
 from asyncua import ua
@@ -107,6 +108,29 @@ def parse_design_value(text: str, quasar_data_type: str) -> object:
 def parse_design_array(values: list[str], quasar_data_type: str) -> list[object]:
     """Parse an array of XML string values (one per <value> config element)."""
     return [parse_design_value(token, quasar_data_type) for token in values]
+
+
+def check_restrictions(raw: str, restrictions) -> None:
+    """Enforce a Design configRestriction on a raw XML value string.
+
+    Same semantics as quasar's generated Configuration.xsd facets. Raises
+    ValueError (callers add the address context).
+    """
+    if restrictions is None:
+        return
+    if restrictions.enumeration and raw not in restrictions.enumeration:
+        raise ValueError(f"{raw!r} is not one of the enumerated values")
+    if restrictions.pattern is not None and re.fullmatch(restrictions.pattern, raw) is None:
+        raise ValueError(f"{raw!r} does not match pattern {restrictions.pattern!r}")
+    checks = (
+        (restrictions.min_inclusive, lambda v, b: v >= b, ">="),
+        (restrictions.max_inclusive, lambda v, b: v <= b, "<="),
+        (restrictions.min_exclusive, lambda v, b: v > b, ">"),
+        (restrictions.max_exclusive, lambda v, b: v < b, "<"),
+    )
+    for bound, ok, symbol in checks:
+        if bound is not None and not ok(float(raw), float(bound)):
+            raise ValueError(f"{raw!r} violates bound (must be {symbol} {bound})")
 
 
 def initial_status(status_text: str) -> int:

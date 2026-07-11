@@ -158,3 +158,49 @@ async def test_method_argument_count_status_codes(sca_server, sca_client):
             ua.Variant(2.0, ua.VariantType.Double),
         )
     assert too_many.value.code == ua.StatusCodes.BadTooManyArguments
+
+
+RESTRICTED_CLASS = (
+    '<d:class name="R"><d:devicelogic/>'
+    '<d:cachevariable name="mode" dataType="UaString" addressSpaceWrite="forbidden"'
+    ' initializeWith="configuration" nullPolicy="nullAllowed">'
+    "<d:configRestriction><d:restrictionByEnumeration>"
+    '<d:enumerationValue value="auto"/><d:enumerationValue value="manual"/>'
+    "</d:restrictionByEnumeration></d:configRestriction></d:cachevariable>"
+    '<d:cachevariable name="gain" dataType="OpcUa_Double" addressSpaceWrite="forbidden"'
+    ' initializeWith="configuration" nullPolicy="nullAllowed">'
+    '<d:configRestriction><d:restrictionByBounds minInclusive="0" maxExclusive="10"/>'
+    "</d:configRestriction></d:cachevariable>"
+    '<d:configentry name="tag" dataType="UaString">'
+    '<d:configRestriction><d:restrictionByPattern pattern="[A-Z]{3}[0-9]+"/>'
+    "</d:configRestriction></d:configentry></d:class>"
+    '<d:root><d:hasobjects instantiateUsing="configuration" class="R" maxOccurs="1"/></d:root>'
+)
+
+
+async def test_restrictions_accept_valid_config(tmp_path):
+    server, url = await boot(
+        tmp_path, RESTRICTED_CLASS, '<R name="r1" mode="auto" gain="9.5" tag="ABC42"/>'
+    )
+    async with server, Client(url=url) as client:
+        assert await client.get_node(ua.NodeId("r1.mode", 2)).read_value() == "auto"
+
+
+@pytest.mark.parametrize(
+    "bad_config, complaint",
+    [
+        ('<R name="r1" mode="turbo"/>', "not one of the enumerated values"),
+        ('<R name="r1" gain="10"/>', "violates bound"),
+        ('<R name="r1" tag="abc"/>', "does not match pattern"),
+    ],
+)
+async def test_restrictions_reject_invalid_config(tmp_path, bad_config, complaint):
+    server, _ = await boot(tmp_path, RESTRICTED_CLASS, bad_config)
+    with pytest.raises(ConfigurationError, match=complaint):
+        await server.init()
+
+
+async def test_max_occurs_enforced(tmp_path):
+    server, _ = await boot(tmp_path, RESTRICTED_CLASS, '<R name="r1"/><R name="r2"/>')
+    with pytest.raises(ConfigurationError, match="at most 1"):
+        await server.init()

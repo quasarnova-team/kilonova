@@ -36,6 +36,24 @@ async def _not_implemented_method(parent, *args):
     return ua.StatusCode(ua.StatusCodes.BadNotImplemented)
 
 
+def _check_cardinality(relations, child_class_names: list[str], where: str) -> None:
+    """Enforce hasobjects minOccurs/maxOccurs, as quasar's Configuration.xsd does."""
+    for rel in relations:
+        if rel.instantiate_using != "configuration":
+            continue
+        count = child_class_names.count(rel.class_name)
+        if count < rel.min_occurs:
+            raise ConfigurationError(
+                f"{where}: needs at least {rel.min_occurs} <{rel.class_name}> "
+                f"instance(s), got {count}"
+            )
+        if rel.max_occurs is not None and count > rel.max_occurs:
+            raise ConfigurationError(
+                f"{where}: allows at most {rel.max_occurs} <{rel.class_name}> "
+                f"instance(s), got {count}"
+            )
+
+
 class AddressSpaceBuilder:
     """Creates types and instances for one Design inside one asyncua server."""
 
@@ -90,6 +108,11 @@ class AddressSpaceBuilder:
 
     async def instantiate_from_config(self, instances: list[Instance]) -> None:
         objects_folder = self._server.nodes.objects
+        _check_cardinality(
+            self._design.root_has_objects,
+            [instance.class_name for instance in instances],
+            where="configuration root",
+        )
         for instance in instances:
             await self._instantiate(instance, objects_folder, parent_address=None)
 
@@ -132,6 +155,11 @@ class AddressSpaceBuilder:
                 await self._add_method(node, address, method)
 
         self.objects[address] = quasar_object
+        _check_cardinality(
+            klass.has_objects,
+            [child.class_name for child in instance.children],
+            where=f"<{klass.name} name={instance.name!r}>",
+        )
 
         if self._calculated is not None:
             for fv in instance.free_variables:
@@ -231,6 +259,8 @@ class AddressSpaceBuilder:
             return
         raw = instance.attributes.get(entry.name)
         try:
+            if raw is not None:
+                oracle.check_restrictions(raw, entry.restrictions)
             value = oracle.parse_design_value(raw, entry.data_type) if raw is not None else None
         except ValueError as exc:
             raise ConfigurationError(f"{instance.name}.{entry.name}: {exc}") from exc
@@ -333,9 +363,10 @@ class AddressSpaceBuilder:
             try:
                 if cv.is_array:
                     if instance is not None and cv.name in instance.array_values:
-                        values = oracle.parse_design_array(
-                            instance.array_values[cv.name], cv.data_type
-                        )
+                        raw_values = instance.array_values[cv.name]
+                        for raw_element in raw_values:
+                            oracle.check_restrictions(raw_element, cv.restrictions)
+                        values = oracle.parse_design_array(raw_values, cv.data_type)
                         variant = oracle.make_variant(values, cv.data_type, is_array=True)
                         return ua.DataValue(variant, ua.StatusCode(ua.StatusCodes.Good))
                     raw = None
@@ -343,6 +374,8 @@ class AddressSpaceBuilder:
                     raw = instance.attributes.get(cv.name) if instance is not None else None
                     if raw is None:
                         raw = cv.default_config_initializer_value
+                    if raw is not None:
+                        oracle.check_restrictions(raw, cv.restrictions)
 
                 if raw is None:
                     if cv.null_policy == "nullForbidden":

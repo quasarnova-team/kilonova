@@ -37,7 +37,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M8 | Source variables + delegated-write callbacks | Client read/write triggers user coroutine | done |
 | M9 | CalculatedVariables (safe formula eval) | Client reads computed value | done |
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | done |
-| M11 | Config XSD validation + restrictions | invalid config rejected like C++ Configurator | pending |
+| M11 | Config restrictions + cardinality validation | invalid config rejected like C++ Configurator | done |
 | M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against microquasar | generated client works unmodified | pending |
 
 ## Current parity table (M6 gate, StandardMetaData ignored)

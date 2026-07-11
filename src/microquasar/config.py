@@ -185,7 +185,12 @@ def _parse_instance(
         elif tag == "CalculatedVariable":
             instance.calculated_variables.append(_parse_calculated_variable(child))
         elif tag in child_classes:
-            instance.children.append(_parse_instance(child, design.classes[tag], design))
+            child_instance = _parse_instance(child, design.classes[tag], design)
+            if any(sibling.name == child_instance.name for sibling in instance.children):
+                raise ConfigurationError(
+                    f"{where}: duplicate child instance name {child_instance.name!r}"
+                )
+            instance.children.append(child_instance)
         elif tag in design.classes:
             raise ConfigurationError(
                 f"{where}: <{tag}> is not declared in this class's hasobjects "

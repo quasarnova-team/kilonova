@@ -20,7 +20,10 @@ def test_parses_the_sca_design():
 
     sca = design.classes["SCA"]
     assert [cv.name for cv in sca.cache_variables] == ["online", "id", "temperature", "channels"]
-    assert [m.name for m in sca.methods] == ["reset"]
+    assert [m.name for m in sca.methods] == ["reset", "scale"]
+    scale = sca.methods[1]
+    assert scale.arguments[0].data_type == "OpcUa_Double"
+    assert scale.return_values[0].name == "result"
     assert sca.has_device_logic
 
     online = sca.cache_variable("online")

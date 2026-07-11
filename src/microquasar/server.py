@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from pathlib import Path
 
 import asyncua
 from asyncua import ua
 
+from microquasar import oracle
 from microquasar.address_space import AddressSpaceBuilder
 from microquasar.config import Instance, load_config
-from microquasar.design import Design
+from microquasar.design import Design, Method
 from microquasar.errors import MicroquasarError
 from microquasar.objects import QuasarObject
 
@@ -45,7 +47,59 @@ class Server:
         self.design: Design | None = None
         self.ua_server: asyncua.Server | None = None
         self.objects: dict[str, QuasarObject] = {}
+        self._method_handlers: dict[str, object] = {}
         self._initialized = False
+
+    def method(self, address: str):
+        """Register an async handler for a method node, by dotted address.
+
+        Usage::
+
+            @server.method("sca1.reset")
+            async def reset(obj):        # obj is the owning QuasarObject
+                ...
+            @server.method("sca1.scale")
+            async def scale(obj, factor):
+                return factor * 2.0      # mapped to the Design's return values
+
+        Registration works before or after ``start()``; unregistered methods
+        answer ``BadNotImplemented``.
+        """
+
+        def decorator(handler):
+            self._method_handlers[address] = handler
+            return handler
+
+        return decorator
+
+    def _make_method_dispatcher(self, parent_address: str, method: Method):
+        method_address = f"{parent_address}.{method.name}"
+
+        async def dispatch(_parent_nodeid, *variants):
+            handler = self._method_handlers.get(method_address)
+            if handler is None:
+                # asyncua contract: return (not raise) a StatusCode for a clean failure
+                return ua.StatusCode(ua.StatusCodes.BadNotImplemented)
+            arguments = [variant.Value for variant in variants]
+            result = handler(self.objects[parent_address], *arguments)
+            if inspect.isawaitable(result):
+                result = await result
+            returns = method.return_values
+            if not returns:
+                return []
+            values = result if isinstance(result, tuple) else (result,)
+            if len(values) != len(returns):
+                _log.error(
+                    "method %s: handler returned %d value(s), design declares %d",
+                    method_address, len(values), len(returns),
+                )
+                return ua.StatusCode(ua.StatusCodes.BadInternalError)
+            return [
+                oracle.make_variant(value, spec.data_type, spec.is_array)
+                for value, spec in zip(values, returns, strict=True)
+            ]
+
+        return dispatch
 
     async def init(self) -> None:
         """Parse Design/config and build the address space (idempotent)."""
@@ -64,7 +118,12 @@ class Server:
                 f"got {namespace_index}"
             )
 
-        builder = AddressSpaceBuilder(self.ua_server, self.design, namespace_index)
+        builder = AddressSpaceBuilder(
+            self.ua_server,
+            self.design,
+            namespace_index,
+            method_dispatcher_factory=self._make_method_dispatcher,
+        )
         await builder.build_types()
         await builder.instantiate_root_design_objects()
 

@@ -32,16 +32,23 @@ FIRST_TYPE_ID = 1000
 
 
 async def _not_implemented_method(parent, *args):
-    raise ua.UaStatusCodeError(ua.StatusCodes.BadNotImplemented)
+    return ua.StatusCode(ua.StatusCodes.BadNotImplemented)
 
 
 class AddressSpaceBuilder:
     """Creates types and instances for one Design inside one asyncua server."""
 
-    def __init__(self, ua_server: asyncua.Server, design: Design, namespace_index: int):
+    def __init__(
+        self,
+        ua_server: asyncua.Server,
+        design: Design,
+        namespace_index: int,
+        method_dispatcher_factory=None,
+    ):
         self._server = ua_server
         self._design = design
         self._ns = namespace_index
+        self._make_dispatcher = method_dispatcher_factory
         self._type_nodes: dict[str, Node] = {}
         #: All instantiated objects keyed by their dotted string address.
         self.objects: dict[str, QuasarObject] = {}
@@ -178,10 +185,15 @@ class AddressSpaceBuilder:
 
     async def _add_method(self, object_node: Node, parent_address: str, method: Method) -> None:
         address = f"{parent_address}.{method.name}"
+        callback = (
+            self._make_dispatcher(parent_address, method)
+            if self._make_dispatcher is not None
+            else _not_implemented_method
+        )
         method_node = await object_node.add_method(
             ua.NodeId(address, self._ns),
             ua.QualifiedName(method.name, self._ns),
-            _not_implemented_method,
+            callback,
         )
         # quasar publishes argument properties at <method>.args / <method>.return_values
         if method.arguments:

@@ -29,7 +29,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M4 | Cache variables: DataType/ValueRank/AccessLevel/initialValue+Status | Client reads every attribute + value + status | done |
 | M5 | MilkyWay parity: `set_cv`, generated `setXxx` setters, live demo | Client subscribes, sees ticking value | done |
 | M6 | Conformance runner + dumper (uasak_dump equivalent) | parity table over quasar CI cases | done |
-| M7 | Methods: nodes + real async handlers (decorator API) | Client calls method, gets result | pending |
+| M7 | Methods: nodes + real async handlers (decorator API) | Client calls method, gets result | done |
 | M8 | Source variables: async read/write callbacks | Client read triggers user coroutine | pending |
 | M9 | CalculatedVariables (safe formula eval) | Client reads computed value | pending |
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | pending |
@@ -57,7 +57,7 @@ As of M6 (all verified by `pytest tests/conformance`, 2026-07-11):
 | calculated_variables | xfail (M9) |
 
 Method *nodes* (incl. `.args`/`.return_values` argument properties) are at parity as part of
-M6; callable handlers remain the M7 deliverable.
+M6; M7 added callable handlers via the `@server.method("sca1.scale")` decorator API.
 
 ## Design decisions (2026 rewrite, vs the 2021 MilkyWay prototype)
 

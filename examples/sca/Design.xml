@@ -16,6 +16,10 @@
       <d:array/>
     </d:cachevariable>
     <d:method name="reset"/>
+    <d:method name="scale">
+      <d:argument name="factor" dataType="OpcUa_Double"/>
+      <d:returnvalue name="result" dataType="OpcUa_Double"/>
+    </d:method>
     <d:hasobjects instantiateUsing="configuration" class="Chip"/>
   </d:class>
   <d:class name="Chip">

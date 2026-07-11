@@ -399,12 +399,29 @@ def _validate(design: Design) -> None:
                     f"class {klass.name}: hasobjects refers to unknown class {rel.class_name}"
                 )
         if klass.single_variable_node and (
-            len(klass.cache_variables) + len(klass.source_variables) != 1
+            len(klass.cache_variables) + len(klass.source_variables) + len(klass.methods)
+            != 1
         ):
+            # quasar's DesignValidator: precisely one variable OR method
             raise DesignError(
                 f"class {klass.name}: singleVariableNode requires exactly one "
-                "cache variable or source variable"
+                "cache variable, source variable, or method"
             )
+        names = [x.name for x in (*klass.cache_variables, *klass.source_variables,
+                                  *klass.config_entries, *klass.methods)]
+        duplicates = {n for n in names if names.count(n) > 1}
+        if duplicates:
+            raise DesignError(f"class {klass.name}: duplicate member name(s) {duplicates}")
+        for cv in klass.cache_variables:
+            low, high = cv.array_bounds
+            if low is not None and high is not None and low > high:
+                raise DesignError(
+                    f"class {klass.name}, {cv.name}: minimumSize > maximumSize"
+                )
+            if cv.is_array and cv.default_config_initializer_value is not None:
+                raise DesignError(
+                    f"class {klass.name}, {cv.name}: defaults are not allowed on arrays"
+                )
         for cv in klass.cache_variables:
             if cv.is_array and cv.initial_value is not None:
                 raise DesignError(

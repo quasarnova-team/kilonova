@@ -12,6 +12,16 @@ DESIGN = (
     '<d:root><d:hasobjects instantiateUsing="configuration" class="A"/></d:root>'
 )
 
+# x starts BadWaitingForInitialData and is client-writable: the C++-legal way to
+# exercise not-yet-good calculated inputs
+VS_DESIGN = (
+    '<d:class name="A"><d:devicelogic/>'
+    '<d:cachevariable name="x" dataType="OpcUa_Double" addressSpaceWrite="regular"'
+    ' initializeWith="valueAndStatus" nullPolicy="nullAllowed"'
+    ' initialStatus="OpcUa_BadWaitingForInitialData"/></d:class>'
+    '<d:root><d:hasobjects instantiateUsing="configuration" class="A"/></d:root>'
+)
+
 CONFIG = (
     '<CalculatedVariableGenericFormula name="Doubled" formula="$thisObjectAddress.fv * 2"/>'
     '<A name="a1" x="3">'
@@ -51,15 +61,15 @@ async def test_calculated_variables_evaluate_and_propagate(tmp_path):
             await node("a1.sum").write_value(ua.Variant(1.0, ua.VariantType.Double))
 
 
-async def test_null_input_gives_bad_status(tmp_path):
-    """C++ parity: null input -> Bad; only waiting inputs propagate
-    BadWaitingForInitialData (CalculatedVariablesChangeListener semantics)."""
+async def test_waiting_input_propagates_waiting_status(tmp_path):
+    """C++ parity: waiting inputs propagate BadWaitingForInitialData; other bad
+    inputs propagate Bad (CalculatedVariablesChangeListener semantics)."""
     config = '<A name="a1"><CalculatedVariable name="calc" value="a1.x + 1"/></A>'
-    server, url = await boot(tmp_path, DESIGN, config)
+    server, url = await boot(tmp_path, VS_DESIGN, config)
     async with server, Client(url=url) as client:
         calc = client.get_node(ua.NodeId("a1.calc", 2))
         data_value = await calc.read_data_value(raise_on_bad_status=False)
-        assert data_value.StatusCode.value == ua.StatusCodes.Bad
+        assert data_value.StatusCode.value == ua.StatusCodes.BadWaitingForInitialData
 
         # once the input becomes non-null, the value appears
         x = client.get_node(ua.NodeId("a1.x", 2))
@@ -68,7 +78,7 @@ async def test_null_input_gives_bad_status(tmp_path):
 
 
 async def test_malformed_formula_rejected(tmp_path):
-    config = '<A name="a1"><CalculatedVariable name="bad" value="__import__(1)"/></A>'
+    config = '<A name="a1" x="1"><CalculatedVariable name="bad" value="__import__(1)"/></A>'
     server, _ = await boot(tmp_path, DESIGN, config)
     from kilonova.errors import ConfigurationError
 
@@ -128,11 +138,11 @@ async def test_cv_initial_value_is_boolean_and_status(tmp_path):
         '<CalculatedVariable name="gated" value="42" status="a1.x &gt; 0"/>'
         "</A>"
     )
-    server, url = await boot(tmp_path, DESIGN, config)
+    server, url = await boot(tmp_path, VS_DESIGN, config)
     async with server, Client(url=url) as client:
         def node(path):
             return client.get_node(ua.NodeId(path, 2))
-        # x is null -> value formula cannot evaluate, but initialValue holds, Good
+        # x is still waiting -> value formula cannot evaluate; initialValue holds, Good
         dv = await node("a1.pre").read_data_value(raise_on_bad_status=False)
         assert dv.Value.Value == pytest.approx(7.0)
         assert dv.StatusCode.is_good()
@@ -142,7 +152,7 @@ async def test_cv_initial_value_is_boolean_and_status(tmp_path):
         assert flag.Value.VariantType == ua.VariantType.Boolean
 
         gated = await node("a1.gated").read_data_value(raise_on_bad_status=False)
-        assert not gated.StatusCode.is_good()  # status formula input null -> Bad
+        assert not gated.StatusCode.is_good()  # status formula input not good -> Bad
 
         await node("a1.x").write_value(ua.Variant(3.0, ua.VariantType.Double))
         assert await node("a1.pre").read_value() == pytest.approx(6.0)

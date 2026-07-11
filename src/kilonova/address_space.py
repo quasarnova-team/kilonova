@@ -139,7 +139,16 @@ class AddressSpaceBuilder:
         browse_name = ua.QualifiedName(instance.name, self._ns)
         _log.debug("instantiating %s %r", klass.name, address)
 
-        if klass.single_variable_node and klass.source_variables:
+        if klass.single_variable_node and klass.methods:
+            method = klass.methods[0]
+            callback = (
+                self._make_dispatcher(parent_address or "", method)
+                if self._make_dispatcher is not None
+                else _not_implemented_method
+            )
+            node = await parent_node.add_method(node_id, browse_name, callback)
+            quasar_object = QuasarObject(self._server, klass, node, address)
+        elif klass.single_variable_node and klass.source_variables:
             sv = klass.source_variables[0]
             node = await self._add_source_variable_node(
                 parent_node, node_id, browse_name, address, sv
@@ -422,10 +431,14 @@ class AddressSpaceBuilder:
                         oracle.check_restrictions(raw, cv.restrictions)
 
                 if raw is None:
-                    if cv.null_policy == "nullForbidden":
+                    if not cv.is_array and instance is not None:
+                        # C++ parity: the generated Configuration.xsd marks scalar
+                        # config-initialized cache variables without a
+                        # defaultConfigInitializerValue as required
                         raise ConfigurationError(
-                            f"{where}: cache variable {cv.name} is nullForbidden but the "
-                            "configuration provides no value"
+                            f"{where}: cache variable {cv.name} is required by the "
+                            "configuration schema but missing (no "
+                            "defaultConfigInitializerValue in the Design)"
                         )
                     return ua.DataValue(
                         ua.Variant(None, ua.VariantType.Null),

@@ -62,7 +62,7 @@ async def test_child_not_in_hasobjects_rejected(tmp_path):
         "</d:class>"
         '<d:class name="B"><d:cachevariable name="y" dataType="OpcUa_Double"'
         ' addressSpaceWrite="forbidden" initializeWith="configuration"'
-        ' nullPolicy="nullAllowed"/></d:class>',
+        ' nullPolicy="nullAllowed" defaultConfigInitializerValue="0"/></d:class>',
         1,
     )
     server, _ = await boot(tmp_path, design_body, '<A name="a1"><B name="b1"/></A>')
@@ -111,7 +111,8 @@ async def test_single_variable_node_takes_config_value(tmp_path):
     design_body = (
         '<d:class name="Prop" singleVariableNode="true"><d:devicelogic/>'
         '<d:cachevariable name="value" dataType="UaString" addressSpaceWrite="forbidden"'
-        ' initializeWith="configuration" nullPolicy="nullAllowed"/></d:class>'
+        ' initializeWith="configuration" nullPolicy="nullAllowed"'
+        ' defaultConfigInitializerValue=""/></d:class>'
         '<d:root><d:hasobjects instantiateUsing="configuration" class="Prop"/></d:root>'
     )
     server, url = await boot(tmp_path, design_body, '<Prop name="p1" value="hello"/>')
@@ -163,12 +164,14 @@ async def test_method_argument_count_status_codes(sca_server, sca_client):
 RESTRICTED_CLASS = (
     '<d:class name="R"><d:devicelogic/>'
     '<d:cachevariable name="mode" dataType="UaString" addressSpaceWrite="forbidden"'
-    ' initializeWith="configuration" nullPolicy="nullAllowed">'
+    ' initializeWith="configuration" nullPolicy="nullAllowed"'
+    ' defaultConfigInitializerValue="auto">'
     "<d:configRestriction><d:restrictionByEnumeration>"
     '<d:enumerationValue value="auto"/><d:enumerationValue value="manual"/>'
     "</d:restrictionByEnumeration></d:configRestriction></d:cachevariable>"
     '<d:cachevariable name="gain" dataType="OpcUa_Double" addressSpaceWrite="forbidden"'
-    ' initializeWith="configuration" nullPolicy="nullAllowed">'
+    ' initializeWith="configuration" nullPolicy="nullAllowed"'
+    ' defaultConfigInitializerValue="1">'
     '<d:configRestriction><d:restrictionByBounds minInclusive="0" maxExclusive="10"/>'
     "</d:configRestriction></d:cachevariable>"
     '<d:configentry name="tag" dataType="UaString">'

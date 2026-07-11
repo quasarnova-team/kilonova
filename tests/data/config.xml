@@ -2,7 +2,7 @@
 <configuration xmlns="http://cern.ch/quasar/Configuration"
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xsi:schemaLocation="http://cern.ch/quasar/Configuration Configuration.xsd">
-  <SCA name="sca1" id="theSCA" temperature="25.5">
+  <SCA name="sca1" id="theSCA" temperature="25.5" target="0">
     <channels>
       <value>1</value>
       <value>2</value>

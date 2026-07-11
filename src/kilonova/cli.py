@@ -15,7 +15,8 @@ from kilonova.server import DEFAULT_ENDPOINT, Server
 
 
 async def _run(args: argparse.Namespace) -> int:
-    server = Server(args.design, config_path=args.config, endpoint=args.endpoint)
+    server = Server(args.design, config_path=args.config, endpoint=args.endpoint,
+                    server_config_path=args.server_config)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGTERM, signal.SIGINT):
@@ -46,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     run_parser = sub.add_parser("run", help="serve a quasar Design")
     run_parser.add_argument("--design", required=True)
     run_parser.add_argument("--config", "--config_file", dest="config")
+    run_parser.add_argument("--opcua_backend_config", dest="server_config",
+                            help="quasar ServerConfig.xml (endpoint/security)")
     run_parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
 
     dump_parser = sub.add_parser("dump", help="dump a running server's address space")

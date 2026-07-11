@@ -76,3 +76,11 @@ async def test_array_dimensions_attribute(sca_client):
     channels = node(sca_client, "sca1.channels")
     dims = (await channels.read_attribute(ua.AttributeIds.ArrayDimensions)).Value.Value
     assert dims == [0]
+
+
+async def test_description_is_null_like_cpp(sca_client):
+    """C++ quasar serves no Description; asyncua's browse-name auto-fill is suppressed."""
+    for path in ("sca1", "sca1.online", "sca1.reset"):
+        description = (await node(sca_client, path).read_attribute(
+            ua.AttributeIds.Description)).Value.Value
+        assert not (description and description.Text)

@@ -20,6 +20,7 @@ from kilonova.config import Configuration, load_config
 from kilonova.design import Design, Method
 from kilonova.errors import KilonovaError
 from kilonova.objects import QuasarObject
+from kilonova.server_config import load_server_config
 
 _log = logging.getLogger(__name__)
 
@@ -44,10 +45,12 @@ class Server:
         config_path: str | Path | None = None,
         endpoint: str = DEFAULT_ENDPOINT,
         namespace_uri: str = "OPCUASERVER",  # the URI C++ quasar publishes at ns=2
+        server_config_path: str | Path | None = None,
     ) -> None:
         self._design_path = Path(design_path)
         self._config_path = Path(config_path) if config_path else None
         self._endpoint = endpoint
+        self._server_config_path = Path(server_config_path) if server_config_path else None
         self._namespace_uri = namespace_uri
         self.design: Design | None = None
         self.ua_server: asyncua.Server | None = None
@@ -320,11 +323,31 @@ class Server:
             return
         self.design = Design.from_file(self._design_path)
 
+        server_config = None
+        if self._server_config_path is not None:
+            server_config = load_server_config(self._server_config_path)
+            if server_config.endpoint_url and self._endpoint == DEFAULT_ENDPOINT:
+                self._endpoint = server_config.endpoint_url
+
         self.ua_server = asyncua.Server()
         await self.ua_server.init()
         self._allow_writes_to_base_datatype_nodes()
         self.ua_server.set_endpoint(self._endpoint)
-        self.ua_server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
+        if server_config is not None:
+            self.ua_server.set_security_policy(server_config.security_policies)
+            if server_config.certificate_path:
+                await self.ua_server.load_certificate(server_config.certificate_path)
+            if server_config.private_key_path:
+                await self.ua_server.load_private_key(server_config.private_key_path)
+            identity_tokens = []
+            if server_config.enable_anonymous:
+                identity_tokens.append("Anonymous")
+            if server_config.enable_user_pw:
+                identity_tokens.append("Username")
+            if identity_tokens:
+                self.ua_server.set_security_IDs(identity_tokens)
+        else:
+            self.ua_server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
         namespace_index = await self.ua_server.register_namespace(self._namespace_uri)
         if namespace_index != QUASAR_NAMESPACE_INDEX:
             raise KilonovaError(

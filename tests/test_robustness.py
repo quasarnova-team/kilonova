@@ -207,3 +207,28 @@ async def test_max_occurs_enforced(tmp_path):
     server, _ = await boot(tmp_path, RESTRICTED_CLASS, '<R name="r1"/><R name="r2"/>')
     with pytest.raises(ConfigurationError, match="at most 1"):
         await server.init()
+
+
+async def test_server_config_endpoint_and_policy(tmp_path):
+    """quasar ServerConfig.xml: endpoint URL and security settings are honoured."""
+    from kilonova import Server as KServer
+
+    port = free_port()
+    (tmp_path / "ServerConfig.xml").write_text(f"""<OpcServerConfig>
+      <UaServerConfig>
+        <UaEndpoint>
+          <Url>opc.tcp://[NodeName]:{port}</Url>
+          <SecuritySetting>
+            <SecurityPolicy>http://opcfoundation.org/UA/SecurityPolicy#None</SecurityPolicy>
+            <MessageSecurityMode>None</MessageSecurityMode>
+          </SecuritySetting>
+        </UaEndpoint>
+        <UserIdentityTokens><EnableAnonymous>true</EnableAnonymous></UserIdentityTokens>
+        <MaxSessionCount>100</MaxSessionCount>
+      </UaServerConfig>
+    </OpcServerConfig>""")
+    design, config = write_pair(tmp_path, SIMPLE_CLASS, '<A name="a1" x="5"/>')
+    server = KServer(design, config_path=config,
+                     server_config_path=tmp_path / "ServerConfig.xml")
+    async with server, Client(url=f"opc.tcp://127.0.0.1:{port}/") as client:
+        assert await client.get_node(ua.NodeId("a1.x", 2)).read_value() == 5

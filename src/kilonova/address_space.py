@@ -36,6 +36,15 @@ async def _not_implemented_method(parent, *args):
     return ua.StatusCode(ua.StatusCodes.BadNotImplemented)
 
 
+async def blank_description(ua_server, node) -> None:
+    """C++ quasar serves null Description; asyncua auto-fills the browse name."""
+    await ua_server.write_attribute_value(
+        node.nodeid,
+        ua.DataValue(ua.Variant(ua.LocalizedText(None), ua.VariantType.LocalizedText)),
+        ua.AttributeIds.Description,
+    )
+
+
 def _check_array_bounds(bounds: tuple[int | None, int | None], count: int, where: str) -> None:
     """d:array minimumSize/maximumSize, enforced like the generated Configuration.xsd."""
     low, high = bounds
@@ -165,6 +174,7 @@ class AddressSpaceBuilder:
             node = await parent_node.add_object(
                 node_id, browse_name, objecttype=self._type_nodes[klass.name].nodeid
             )
+            await blank_description(self._server, node)
             quasar_object = QuasarObject(self._server, klass, node, address)
             for cv in klass.cache_variables:
                 var_node = await self._add_cache_variable(node, address, cv, instance)
@@ -283,6 +293,7 @@ class AddressSpaceBuilder:
                 attribute,
             )
         await self._server.write_attribute_value(node.nodeid, initial)
+        await blank_description(self._server, node)
         self.source_variables[address] = sv
         return node
 
@@ -316,6 +327,7 @@ class AddressSpaceBuilder:
             datatype=oracle.data_type_node_id(entry.data_type),
         )
         await self._write_value_rank(node, self._value_rank(False, entry.data_type))
+        await blank_description(self._server, node)
 
     async def _add_method(self, object_node: Node, parent_address: str, method: Method) -> None:
         address = f"{parent_address}.{method.name}"
@@ -329,6 +341,7 @@ class AddressSpaceBuilder:
             ua.QualifiedName(method.name, self._ns),
             callback,
         )
+        await blank_description(self._server, method_node)
         # quasar publishes argument properties at <method>.args / <method>.return_values
         if method.arguments:
             await self._add_argument_property(
@@ -347,9 +360,11 @@ class AddressSpaceBuilder:
             ua.Argument(
                 Name=arg.name,
                 DataType=oracle.data_type_node_id(arg.data_type),
-                ValueRank=self._value_rank(arg.is_array, arg.data_type),
+                # C++ argument scalars are always -1 (no UaVariant special case)
+                ValueRank=1 if arg.is_array else -1,
                 ArrayDimensions=[],
-                Description=ua.LocalizedText(""),
+                # C++ serves the argument name as its description
+                Description=ua.LocalizedText(arg.name),
             )
             for arg in arguments
         ]
@@ -378,6 +393,7 @@ class AddressSpaceBuilder:
         )
 
     async def _finalize_variable(self, node: Node, cv: CacheVariable, dv: ua.DataValue) -> None:
+        await blank_description(self._server, node)
         if cv.is_array:
             # C++ quasar sets a one-element ArrayDimensions on every array variable
             await self._server.write_attribute_value(

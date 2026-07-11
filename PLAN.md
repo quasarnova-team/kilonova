@@ -126,23 +126,25 @@ own CI) — values and references are dumped but not compared; strengthening it 
 gate is future work alongside M11.
 
 
-## Parity backlog (2026-07-11 fleet audit, 24 confirmed findings)
+## Parity backlog (2026-07-11 fleet audit, 24 confirmed findings) — CLOSED
 
-Fixed immediately (0.1.1): configentry defaultValue + required-ness, d:array
-minimumSize/maximumSize, isKey uniqueness, FreeVariable accessLevel, calculated-variable
-bad-input status split, namespace URI OPCUASERVER, SIGTERM, CLI --version/--config_file.
+All findings implemented and test-verified the same day (see CHANGELOG 0.1.1):
+defaults/required-ness (config entries AND scalar cache variables, C++ XSD semantics),
+array size facets, isKey uniqueness, FreeVariable accessLevel, full muParser formula
+dialect (functions, comparisons, logical ops, ternary, constants), formula meta-functions
+($_, $parentObjectAddress(numLevelsUp=N), dash/slash escaping), CalculatedVariable
+initialValue/isBoolean/status, waiting-vs-bad status propagation, synchronization domains
+(source read/write + method call mutexes as asyncio locks; domain "no" is concurrent like
+C++), executionSynchronicity (asyncio gives C++'s deferred-completion semantics natively),
+design semantic validation (SVN one-member rule incl. methods, duplicate members, array
+bound sanity, defaults-on-arrays), SVN method nodes, ArrayDimensions, null Descriptions,
+method-argument attribute details, namespace URI OPCUASERVER, SIGTERM, CLI
+--version/--config_file/--opcua_backend_config, ServerConfig.xml (endpoint URL, security
+policy/mode pairs incl. Basic256Sha256 Sign/SignAndEncrypt with certificates, identity
+tokens).
 
-Remaining, prioritized:
-
-| Size | Gap | Notes |
-|------|-----|-------|
-| L | Synchronization domains: sourcevariable addressSpaceRead/WriteUseMutex (6 domains), method addressSpaceCallUseMutex, d:devicelogic/d:mutex | C++ serializes device access per design-declared domain; kilonova only serializes same-address source reads. Needs per-domain asyncio locks. |
-| L | ServerConfig.xml: endpoints, PKI/security policies, user auth, session/subscription limits | kilonova is NoSecurity-only today. asyncua supports security policies — wire ServerConfig.xml onto them. |
-| L | CalculatedVariables formula language: muParser function set (sin/log/sqrt/min/max/avg/...), comparison + logical operators, ?: | Extend the AST whitelist + function table. |
-| M | Formula meta-functions: $_ , $parentObjectAddress(numLevelsUp=N), dash/slash escaping | resolve_formula_text extension. |
-| M | CalculatedVariable initialValue / isBoolean / status (separate status formula) | Engine + config parse. |
-| M | Method executionSynchronicity=asynchronous (immediate Good + finishCall) | asyncio task dispatch. |
-| M | Design validation stage (DesignValidator semantic rules + Design.xsd assertValid at load) | Would also fix: SVN class with a single method is valid in quasar. |
-| M | Required-ness of config-initialized scalar cachevariables without defaultConfigInitializerValue (C++ XSD requires them regardless of nullPolicy) | Deliberately deferred: breaks the convenient null-serving; decide policy first. |
-| S | ArrayDimensions attribute on array cache variables | C++ sets 1-element ArrayDimensions. |
-| S | Method-argument property attribute details (Description etc.) | Minor dump deltas. |
+Known deliberate residuals (each warns loudly at runtime where relevant):
+- mutex domain `handpicked` — raises "not supported yet".
+- ServerConfig PKI trust/revocation lists, session/subscription limits, tracing — logged
+  as unsupported when configured.
+- Compiling/running a generated UaoForQuasar C++ client needs UASDK (docker) — external.

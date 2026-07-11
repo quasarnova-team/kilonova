@@ -74,3 +74,45 @@ async def test_malformed_formula_rejected(tmp_path):
 
     with pytest.raises(ConfigurationError, match="unsupported construct"):
         await server.init()
+
+
+async def test_muparser_formula_language(tmp_path):
+    """Functions, comparisons, logical ops, ternary, constants (muParser dialect)."""
+    config = (
+        '<A name="a1" x="4">'
+        '<CalculatedVariable name="hyp" value="sqrt(a1.x^2 + 3^2)"/>'
+        '<CalculatedVariable name="gate" value="a1.x &gt; 3 &amp;&amp; a1.x &lt; 10"/>'
+        '<CalculatedVariable name="pick" value="a1.x &gt; 100 ? 1 : avg(2, 4, 6)"/>'
+        '<CalculatedVariable name="tau" value="2 * _pi"/>'
+        "</A>"
+    )
+    server, url = await boot(tmp_path, DESIGN, config)
+    async with server, Client(url=url) as client:
+        async def value(path):
+            return await client.get_node(ua.NodeId(path, 2)).read_value()
+        assert await value("a1.hyp") == pytest.approx(5.0)
+        assert await value("a1.gate") == pytest.approx(1.0)
+        assert await value("a1.pick") == pytest.approx(4.0)
+        assert await value("a1.tau") == pytest.approx(6.283185307)
+
+
+async def test_formula_meta_functions(tmp_path):
+    """$_ alias, $parentObjectAddress(numLevelsUp=N)."""
+    design_body = (
+        '<d:class name="Sub"><d:devicelogic/>'
+        '<d:cachevariable name="y" dataType="OpcUa_Double" addressSpaceWrite="regular"'
+        ' initializeWith="configuration" nullPolicy="nullAllowed"/></d:class>'
+        '<d:class name="A"><d:devicelogic/>'
+        '<d:cachevariable name="x" dataType="OpcUa_Double" addressSpaceWrite="regular"'
+        ' initializeWith="configuration" nullPolicy="nullAllowed"/>'
+        '<d:hasobjects instantiateUsing="configuration" class="Sub"/></d:class>'
+        '<d:root><d:hasobjects instantiateUsing="configuration" class="A"/></d:root>'
+    )
+    config = (
+        '<A name="a1" x="10"><Sub name="s1" y="5">'
+        '<CalculatedVariable name="c" value="$_.y + $parentObjectAddress(numLevelsUp=1).x"/>'
+        "</Sub></A>"
+    )
+    server, url = await boot(tmp_path, design_body, config)
+    async with server, Client(url=url) as client:
+        assert await client.get_node(ua.NodeId("a1.s1.c", 2)).read_value() == pytest.approx(15.0)

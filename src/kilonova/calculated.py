@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 
@@ -34,7 +35,60 @@ _BINOPS = {
     ast.Pow: lambda a, b: a**b,
 }
 
+_COMPARES = {
+    ast.Eq: lambda a, b: a == b, ast.NotEq: lambda a, b: a != b,
+    ast.Lt: lambda a, b: a < b, ast.LtE: lambda a, b: a <= b,
+    ast.Gt: lambda a, b: a > b, ast.GtE: lambda a, b: a >= b,
+}
+
+#: muParser's built-in function set (quasar Documentation/CalculatedVariables.rst)
+#: plus pow(), which quasar adds on top. log and ln are both base e, as in muParser.
+_FUNCTIONS = {
+    "sin": math.sin, "cos": math.cos, "tan": math.tan,
+    "asin": math.asin, "acos": math.acos, "atan": math.atan,
+    "sinh": math.sinh, "cosh": math.cosh, "tanh": math.tanh,
+    "asinh": math.asinh, "acosh": math.acosh, "atanh": math.atanh,
+    "log": math.log, "ln": math.log, "log2": math.log2, "log10": math.log10,
+    "exp": math.exp, "sqrt": math.sqrt, "abs": abs,
+    "sign": lambda x: (x > 0) - (x < 0), "rint": round,
+    "min": min, "max": max, "sum": lambda *a: sum(a),
+    "avg": lambda *a: sum(a) / len(a), "pow": math.pow,
+}
+
+_CONSTANTS = {"_pi": math.pi, "_e": math.e}
+
 _GENERIC_CALL = re.compile(r"\$applyGenericFormula\((\w+)\)")
+_PARENT_ADDR = re.compile(r"\$parentObjectAddress\(numLevelsUp=(\d+)\)")
+_ESCAPED_TOKEN = re.compile(r"(?:[\w.]|\\[-/])+")
+
+
+def _escape_address(address: str) -> str:
+    return address.replace("-", "\\-").replace("/", "\\/")
+
+
+def _translate_ternary(text: str) -> str:
+    """muParser 'c ? a : b' -> python '((a) if (c) else (b))', right-associative."""
+    depth = 0
+    for i, ch in enumerate(text):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "?" and depth == 0:
+            cond = text[:i]
+            rest = text[i + 1:]
+            rdepth = 0
+            for j, rc in enumerate(rest):
+                if rc == "(":
+                    rdepth += 1
+                elif rc == ")":
+                    rdepth -= 1
+                elif rc == ":" and rdepth == 0:
+                    a, b = rest[:j], rest[j + 1:]
+                    return (f"(({_translate_ternary(a)}) if ({_translate_ternary(cond)})"
+                            f" else ({_translate_ternary(b)}))")
+            raise ConfigurationError(f"ternary without ':' in formula fragment {text!r}")
+    return text
 
 
 @dataclass
@@ -42,6 +96,7 @@ class CompiledFormula:
     text: str
     tree: ast.Expression
     inputs: tuple[str, ...] = field(default_factory=tuple)
+    aliases: dict[str, str] = field(default_factory=dict)
 
 
 def _address_of(node: ast.expr) -> str | None:
@@ -56,9 +111,16 @@ def _address_of(node: ast.expr) -> str | None:
     return None
 
 
-def compile_formula(text: str) -> CompiledFormula:
-    """Parse and validate a formula; muParser's ``^`` is mapped to python ``**``."""
-    normalized = text.strip().replace("^", "**")
+def compile_formula(text: str, aliases: dict[str, str] | None = None) -> CompiledFormula:
+    """Parse and validate a formula in the muParser dialect quasar uses.
+
+    ``^`` maps to python ``**``, ``&&``/``||`` to and/or, ``c ? a : b`` to a
+    conditional expression; ``aliases`` maps placeholder identifiers back to
+    the real (escaped) input addresses.
+    """
+    aliases = aliases or {}
+    normalized = text.strip().replace("^", "**").replace("&&", " and ").replace("||", " or ")
+    normalized = _translate_ternary(normalized)
     try:
         tree = ast.parse(normalized, mode="eval")
     except SyntaxError as exc:
@@ -70,11 +132,27 @@ def compile_formula(text: str) -> CompiledFormula:
         if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
             validate(node.left)
             validate(node.right)
-        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub, ast.Not)):
             validate(node.operand)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        elif isinstance(node, ast.Compare) and all(type(op) in _COMPARES for op in node.ops):
+            validate(node.left)
+            for comparator in node.comparators:
+                validate(comparator)
+        elif isinstance(node, ast.BoolOp):
+            for value in node.values:
+                validate(value)
+        elif isinstance(node, ast.IfExp):
+            validate(node.test)
+            validate(node.body)
+            validate(node.orelse)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in _FUNCTIONS and not node.keywords:
+            for argument in node.args:
+                validate(argument)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) or isinstance(node, ast.Name) and node.id in _CONSTANTS:
             pass
         elif (address := _address_of(node)) is not None:
+            address = aliases.get(address, address)
             if address not in inputs:
                 inputs.append(address)
         else:
@@ -83,7 +161,7 @@ def compile_formula(text: str) -> CompiledFormula:
             )
 
     validate(tree.body)
-    return CompiledFormula(text=text, tree=tree, inputs=tuple(inputs))
+    return CompiledFormula(text=text, tree=tree, inputs=tuple(inputs), aliases=dict(aliases))
 
 
 def evaluate(compiled: CompiledFormula, env: dict[str, float]) -> float:
@@ -92,12 +170,35 @@ def evaluate(compiled: CompiledFormula, env: dict[str, float]) -> float:
             return _BINOPS[type(node.op)](walk(node.left), walk(node.right))
         if isinstance(node, ast.UnaryOp):
             operand = walk(node.operand)
-            return -operand if isinstance(node.op, ast.USub) else operand
+            if isinstance(node.op, ast.USub):
+                return -operand
+            if isinstance(node.op, ast.Not):
+                return float(not operand)
+            return operand
+        if isinstance(node, ast.Compare):
+            left = walk(node.left)
+            for op, comparator in zip(node.ops, node.comparators, strict=True):
+                right = walk(comparator)
+                if not _COMPARES[type(op)](left, right):
+                    return 0.0
+                left = right
+            return 1.0
+        if isinstance(node, ast.BoolOp):
+            results = [walk(value) for value in node.values]
+            truth = all(results) if isinstance(node.op, ast.And) else any(results)
+            return float(truth)
+        if isinstance(node, ast.IfExp):
+            return walk(node.body) if walk(node.test) else walk(node.orelse)
+        if isinstance(node, ast.Call):
+            return float(_FUNCTIONS[node.func.id](*[walk(a) for a in node.args]))
         if isinstance(node, ast.Constant):
             return float(node.value)
-        return env[_address_of(node)]
+        if isinstance(node, ast.Name) and node.id in _CONSTANTS:
+            return _CONSTANTS[node.id]
+        address = _address_of(node)
+        return env[compiled.aliases.get(address, address)]
 
-    return walk(compiled.tree.body)
+    return float(walk(compiled.tree.body))
 
 
 _FREE_VARIABLE_PARSERS = {
@@ -122,7 +223,15 @@ class CalculatedVariablesEngine:
     def register_generic_formula(self, name: str, formula: str) -> None:
         self._generic_formulas[name] = formula
 
-    def resolve_formula_text(self, text: str, this_object_address: str) -> str:
+    def resolve_formula_text(
+        self, text: str, this_object_address: str
+    ) -> tuple[str, dict[str, str]]:
+        """Expand meta-functions and escaped addresses.
+
+        Returns the python-parseable text plus an alias map from placeholder
+        identifiers to real input addresses (needed when an address contains
+        ``-`` or ``/``, escaped in the muParser dialect as ``\\-`` / ``\\/``).
+        """
         def expand_generic(match: re.Match) -> str:
             try:
                 return f"({self._generic_formulas[match.group(1)]})"
@@ -131,9 +240,34 @@ class CalculatedVariablesEngine:
                     f"unknown generic formula {match.group(1)!r}"
                 ) from None
 
+        def expand_parent(match: re.Match) -> str:
+            levels = int(match.group(1))
+            parts = this_object_address.split(".") if this_object_address else []
+            if levels > len(parts):
+                raise ConfigurationError(
+                    f"$parentObjectAddress(numLevelsUp={levels}) goes above the root "
+                    f"(this object is {this_object_address!r})"
+                )
+            return _escape_address(".".join(parts[: len(parts) - levels]))
+
         text = _GENERIC_CALL.sub(expand_generic, text)
-        return text.replace("$thisObjectAddress.", f"{this_object_address}." if
-                            this_object_address else "")
+        text = _PARENT_ADDR.sub(expand_parent, text)
+        this_escaped = _escape_address(this_object_address)
+        for token in ("$thisObjectAddress", "$_"):
+            text = text.replace(f"{token}.", f"{this_escaped}." if this_escaped else "")
+
+        aliases: dict[str, str] = {}
+
+        def to_placeholder(match: re.Match) -> str:
+            token = match.group(0)
+            if "\\" not in token:
+                return token
+            placeholder = f"__kn{len(aliases)}__"
+            aliases[placeholder] = token.replace("\\-", "-").replace("\\/", "/")
+            return placeholder
+
+        text = _ESCAPED_TOKEN.sub(to_placeholder, text)
+        return text, aliases
 
     async def add_free_variable(
         self, parent_node, parent_address: str, name: str, data_type: str,
@@ -161,8 +295,8 @@ class CalculatedVariablesEngine:
         self, parent_node, parent_address: str, name: str, formula_text: str
     ) -> None:
         address = f"{parent_address}.{name}" if parent_address else name
-        resolved = self.resolve_formula_text(formula_text, parent_address)
-        compiled = compile_formula(resolved)
+        resolved, aliases = self.resolve_formula_text(formula_text, parent_address)
+        compiled = compile_formula(resolved, aliases)
         # like the C++ oracle: calculated variables expose BaseDataType, read-only
         await parent_node.add_variable(
             ua.NodeId(address, self._ns),

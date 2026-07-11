@@ -1,6 +1,6 @@
 [project]
 name = "kilonova"
-version = "0.1.1"
+version = "1.0.0"
 description = "Pure-Python OPC UA servers from quasar Design files — the quasarnova family's no-codegen engine"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -8,7 +8,7 @@ license = "BSD-2-Clause"
 authors = [{ name = "Paris Moschovakos", email = "paris@moschovakos.com" }]
 keywords = ["opcua", "opc-ua", "quasar", "scada", "server", "cern", "asyncua"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Manufacturing",
     "Programming Language :: Python :: 3",
@@ -16,6 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: System :: Hardware",
     "Topic :: Scientific/Engineering :: Physics",
 ]

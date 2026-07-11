@@ -86,6 +86,15 @@ Credits
 - Paris Moschovakos (paris@moschovakos.com) — kilonova
 - Piotr Nikiel — quasar concept and architecture; MilkyWay, the predecessor
 
+Interface stability
+-------------------
+
+From 1.0.0, kilonova follows semantic versioning. The public API is
+`kilonova.Server` (constructor arguments, `objects`, the `method`/`read`/`write`
+decorators), `kilonova.Design`, `QuasarObject` (`set_cv`/`get_cv`/generated setters)
+and the exceptions in `kilonova.errors`. Anything imported from other modules is
+internal. Breaking changes get a deprecation release first.
+
 Contact: paris@moschovakos.com
 
 License: BSD-2-Clause.

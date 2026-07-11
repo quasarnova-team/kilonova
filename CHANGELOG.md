@@ -1,5 +1,16 @@
 # ChangeLog
 
+1.0.0 (2026-07-11)
+------------------
+- Enforced security: user/password authentication (ServerConfig identity
+  tokens + Server(users=...)); anonymous logon rejectable.
+- handpicked mutex domain: C++ semantics (developer holds the lock).
+- Scale gate in CI: 2000-variable server under sustained churn with live
+  subscription, bounded memory.
+- CI: Python 3.10-3.14, Linux/macOS/Windows, nightly conformance run
+  against quasar master (upstream drift detection).
+- Interface stability commitment (semver); Development Status: Stable.
+
 0.1.1 (2026-07-11)
 ------------------
 - Parity: configentry defaultValue served and required-ness enforced; d:array

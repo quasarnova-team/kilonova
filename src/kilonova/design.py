@@ -108,7 +108,9 @@ class SourceVariable:
     data_type: str
     address_space_read: str = "forbidden"  # forbidden | synchronous | asynchronous
     address_space_write: str = "forbidden"
-    read_use_mutex: str = "no"  # no | of_this_operation | of_this_variable | of_containing_object | of_parent_of_containing_object | handpicked
+    # no | of_this_operation | of_this_variable | of_containing_object |
+    # of_parent_of_containing_object | handpicked
+    read_use_mutex: str = "no"
     write_use_mutex: str = "no"
     is_array: bool = False
 

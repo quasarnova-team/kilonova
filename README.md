@@ -74,6 +74,7 @@ Documentation
 
 - [doc/Architecture.md](doc/Architecture.md) — modules and data flow
 - [doc/DeviceLogic.md](doc/DeviceLogic.md) — the user API
+- [doc/CalculatedVariables.md](doc/CalculatedVariables.md) — formulas, exactly the C++ dialect
 - [doc/Parity.md](doc/Parity.md) — the parity contract and current status
 - [PLAN.md](PLAN.md) — milestone log, parity backlog, engineering notes
 - [CHANGELOG.md](CHANGELOG.md) — release history

@@ -99,3 +99,14 @@ Method `executionSynchronicity` is parsed and both values behave like C++'s
 *asynchronous* mode by construction: handlers are awaited coroutines, so a slow method
 never blocks the server loop, and the client's Call completes when the handler finishes
 (C++'s `finishCall`).
+
+Server configuration
+--------------------
+
+`kilonova run --design D --config C [--opcua_backend_config ServerConfig.xml]` consumes the
+same three files as a C++ quasar server, unmodified. From ServerConfig.xml kilonova honours
+the endpoint URL (`[NodeName]` = all interfaces), security policy/mode pairs (None,
+Basic256Sha256 Sign / SignAndEncrypt with server certificate + key) and identity tokens
+(anonymous / user-password); unsupported knobs (PKI trust lists, session limits, tracing)
+are logged as warnings, never silently dropped. The configuration schema is as strict as
+the C++ Configurator: required scalars, defaults, array size facets, key uniqueness.

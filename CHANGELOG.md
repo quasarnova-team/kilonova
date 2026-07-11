@@ -1,6 +1,6 @@
 # ChangeLog
 
-0.1.1 (unreleased)
+0.1.1 (2026-07-11)
 ------------------
 - Parity: configentry defaultValue served and required-ness enforced; d:array
   minimumSize/maximumSize enforced; isKey uniqueness among siblings; FreeVariable

@@ -1,6 +1,6 @@
 [project]
 name = "kilonova"
-version = "0.1.0"
+version = "0.1.1"
 description = "Pure-Python OPC UA servers from quasar Design files — the quasarnova family's no-codegen engine"
 readme = "README.md"
 requires-python = ">=3.10"

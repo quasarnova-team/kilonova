@@ -36,6 +36,15 @@ async def _not_implemented_method(parent, *args):
     return ua.StatusCode(ua.StatusCodes.BadNotImplemented)
 
 
+def _check_array_bounds(bounds: tuple[int | None, int | None], count: int, where: str) -> None:
+    """d:array minimumSize/maximumSize, enforced like the generated Configuration.xsd."""
+    low, high = bounds
+    if low is not None and count < low:
+        raise ConfigurationError(f"{where}: array has {count} value(s), minimumSize is {low}")
+    if high is not None and count > high:
+        raise ConfigurationError(f"{where}: array has {count} value(s), maximumSize is {high}")
+
+
 def _check_cardinality(relations, child_class_names: list[str], where: str) -> None:
     """Enforce hasobjects minOccurs/maxOccurs, as quasar's Configuration.xsd does."""
     for rel in relations:
@@ -171,7 +180,8 @@ class AddressSpaceBuilder:
         if self._calculated is not None:
             for fv in instance.free_variables:
                 await self._calculated.add_free_variable(
-                    node, address, fv.name, fv.data_type, fv.initial_value
+                    node, address, fv.name, fv.data_type, fv.initial_value,
+                    fv.access_level,
                 )
             for calc in instance.calculated_variables:
                 await self._calculated.add_calculated_variable(
@@ -274,10 +284,18 @@ class AddressSpaceBuilder:
         if entry.is_array:
             return
         raw = instance.attributes.get(entry.name)
+        if raw is None:
+            raw = entry.default_value
+        if raw is None:
+            # C++ quasar's generated Configuration.xsd marks entries without a
+            # defaultValue as required - an omitted attribute fails config load
+            raise ConfigurationError(
+                f"{instance.name}: config entry {entry.name!r} is required "
+                "(no defaultValue in the Design) but missing from the configuration"
+            )
         try:
-            if raw is not None:
-                oracle.check_restrictions(raw, entry.restrictions)
-            value = oracle.parse_design_value(raw, entry.data_type) if raw is not None else None
+            oracle.check_restrictions(raw, entry.restrictions)
+            value = oracle.parse_design_value(raw, entry.data_type)
         except ValueError as exc:
             raise ConfigurationError(f"{instance.name}.{entry.name}: {exc}") from exc
         variant = oracle.make_variant(value, entry.data_type, is_array=False)
@@ -380,6 +398,8 @@ class AddressSpaceBuilder:
                 if cv.is_array:
                     if instance is not None and cv.name in instance.array_values:
                         raw_values = instance.array_values[cv.name]
+                        _check_array_bounds(cv.array_bounds, len(raw_values),
+                                            f"{where}.{cv.name}")
                         for raw_element in raw_values:
                             oracle.check_restrictions(raw_element, cv.restrictions)
                         values = oracle.parse_design_array(raw_values, cv.data_type)

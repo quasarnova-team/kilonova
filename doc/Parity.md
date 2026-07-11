@@ -29,8 +29,8 @@ Current status: **12/12 cases PASS.**
 Gate 2: live production servers
 -------------------------------
 
-The `.parity-night` campaign compares probes of real servers. kilonova runs as a third
-backend column, no docker/build:
+The `.parity-night` campaign (a local campaign workspace, not part of this repository)
+compares probes of real servers. kilonova runs as a third backend column, no docker/build:
 
 ```
 bash .parity-night/scripts/run_kilonova_cell.sh <cell> <server-src> <config.xml> <port>

@@ -52,12 +52,14 @@ async def test_calculated_variables_evaluate_and_propagate(tmp_path):
 
 
 async def test_null_input_gives_bad_status(tmp_path):
+    """C++ parity: null input -> Bad; only waiting inputs propagate
+    BadWaitingForInitialData (CalculatedVariablesChangeListener semantics)."""
     config = '<A name="a1"><CalculatedVariable name="calc" value="a1.x + 1"/></A>'
     server, url = await boot(tmp_path, DESIGN, config)
     async with server, Client(url=url) as client:
         calc = client.get_node(ua.NodeId("a1.calc", 2))
         data_value = await calc.read_data_value(raise_on_bad_status=False)
-        assert data_value.StatusCode.value == ua.StatusCodes.BadWaitingForInitialData
+        assert data_value.StatusCode.value == ua.StatusCodes.Bad
 
         # once the input becomes non-null, the value appears
         x = client.get_node(ua.NodeId("a1.x", 2))

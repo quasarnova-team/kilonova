@@ -137,7 +137,7 @@ class CalculatedVariablesEngine:
 
     async def add_free_variable(
         self, parent_node, parent_address: str, name: str, data_type: str,
-        initial_value: str | None,
+        initial_value: str | None, access_level: str = "RW",
     ) -> None:
         address = f"{parent_address}.{name}" if parent_address else name
         try:
@@ -154,7 +154,8 @@ class CalculatedVariablesEngine:
             ua.Variant(value, variant_type if value is not None else ua.VariantType.Null),
             datatype=ua.NodeId(variant_type.value),
         )
-        await node.set_writable(True)
+        if access_level != "R":  # R | RW | W, as in C++ FreeVariablesEngine
+            await node.set_writable(True)
 
     async def add_calculated_variable(
         self, parent_node, parent_address: str, name: str, formula_text: str
@@ -201,14 +202,23 @@ class CalculatedVariablesEngine:
         compiled = self._formulas[address]
         env: dict[str, float] = {}
         good = True
+        # C++ parity: inputs still waiting propagate BadWaitingForInitialData;
+        # any other bad/null input propagates plain Bad
+        bad_status = ua.StatusCodes.BadWaitingForInitialData
         for input_address in compiled.inputs:
             data_value = aspace.read_attribute_value(
                 ua.NodeId(input_address, self._ns), ua.AttributeIds.Value
             )
             value = data_value.Value.Value if data_value.Value is not None else None
             in_status = data_value.StatusCode
-            if value is None or (in_status is not None and not in_status.is_good()):
+            if in_status is not None and not in_status.is_good():
                 good = False
+                if in_status.value != ua.StatusCodes.BadWaitingForInitialData:
+                    bad_status = ua.StatusCodes.Bad
+                break
+            if value is None:
+                good = False
+                bad_status = ua.StatusCodes.Bad
                 break
             env[input_address] = float(value)
 
@@ -217,10 +227,11 @@ class CalculatedVariablesEngine:
                 result = evaluate(compiled, env)
             except ArithmeticError:
                 good = False
+                bad_status = ua.StatusCodes.Bad
         if good:
             new = (result, ua.StatusCodes.Good)
         else:
-            new = (None, ua.StatusCodes.BadWaitingForInitialData)
+            new = (None, bad_status)
         if self._last.get(address) == new:
             return  # unchanged: stop propagation (also breaks accidental cycles)
         self._last[address] = new

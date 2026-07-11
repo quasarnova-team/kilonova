@@ -41,7 +41,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against kilonova | generated client works unmodified | done (local legs) |
 | M13 | parity-night third backend column (production servers) | probe parity vs live C++ backends | done — ATCA/CAEN full structural parity; CanOpen surfaced 2 cross-backend quirks (see .parity-night/cells/*-kilonova/deps-note.txt) |
 
-## Current parity table (M6 gate, StandardMetaData ignored)
+## Current parity table (M6 gate; StandardMetaData compared in full for default_design, ignored elsewhere — like quasar's own CI)
 
 Run `uv run pytest tests/conformance -v` with a quasar checkout next door.
 As of M6 (all verified by `pytest tests/conformance`, 2026-07-11):
@@ -124,3 +124,25 @@ regression-tested in `tests/test_robustness.py`:
 Known gate limitations (roadmap): the comparer checks only NodeId+attributes (like quasar's
 own CI) — values and references are dumped but not compared; strengthening it beyond the C++
 gate is future work alongside M11.
+
+
+## Parity backlog (2026-07-11 fleet audit, 24 confirmed findings)
+
+Fixed immediately (0.1.1): configentry defaultValue + required-ness, d:array
+minimumSize/maximumSize, isKey uniqueness, FreeVariable accessLevel, calculated-variable
+bad-input status split, namespace URI OPCUASERVER, SIGTERM, CLI --version/--config_file.
+
+Remaining, prioritized:
+
+| Size | Gap | Notes |
+|------|-----|-------|
+| L | Synchronization domains: sourcevariable addressSpaceRead/WriteUseMutex (6 domains), method addressSpaceCallUseMutex, d:devicelogic/d:mutex | C++ serializes device access per design-declared domain; kilonova only serializes same-address source reads. Needs per-domain asyncio locks. |
+| L | ServerConfig.xml: endpoints, PKI/security policies, user auth, session/subscription limits | kilonova is NoSecurity-only today. asyncua supports security policies — wire ServerConfig.xml onto them. |
+| L | CalculatedVariables formula language: muParser function set (sin/log/sqrt/min/max/avg/...), comparison + logical operators, ?: | Extend the AST whitelist + function table. |
+| M | Formula meta-functions: $_ , $parentObjectAddress(numLevelsUp=N), dash/slash escaping | resolve_formula_text extension. |
+| M | CalculatedVariable initialValue / isBoolean / status (separate status formula) | Engine + config parse. |
+| M | Method executionSynchronicity=asynchronous (immediate Good + finishCall) | asyncio task dispatch. |
+| M | Design validation stage (DesignValidator semantic rules + Design.xsd assertValid at load) | Would also fix: SVN class with a single method is valid in quasar. |
+| M | Required-ness of config-initialized scalar cachevariables without defaultConfigInitializerValue (C++ XSD requires them regardless of nullPolicy) | Deliberately deferred: breaks the convenient null-serving; decide policy first. |
+| S | ArrayDimensions attribute on array cache variables | C++ sets 1-element ArrayDimensions. |
+| S | Method-argument property attribute details (Description etc.) | Minor dump deltas. |

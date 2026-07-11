@@ -58,6 +58,7 @@ class CacheVariable:
     initial_status: str | None = None
     default_config_initializer_value: str | None = None
     is_array: bool = False
+    array_bounds: tuple[int | None, int | None] = (None, None)
     restrictions: Restrictions | None = None
 
     @property
@@ -74,6 +75,8 @@ class ConfigEntry:
     data_type: str
     is_key: bool = False
     is_array: bool = False
+    default_value: str | None = None
+    array_bounds: tuple[int | None, int | None] = (None, None)
     restrictions: Restrictions | None = None
 
 
@@ -229,7 +232,9 @@ def _parse_class(element: etree._Element) -> QuasarClass:
                     is_key=child.get("isKey") == "true",
                     is_array=any(_local(g.tag) == "array" for g in child
                                  if isinstance(g.tag, str)),
+                    default_value=child.get("defaultValue"),
                     restrictions=_parse_restrictions(child),
+                    array_bounds=_parse_array_bounds(child),
                 )
             )
         elif tag == "method":
@@ -283,8 +288,19 @@ def _parse_cache_variable(element: etree._Element) -> CacheVariable:
         initial_status=element.get("initialStatus"),
         default_config_initializer_value=element.get("defaultConfigInitializerValue"),
         is_array=is_array,
+        array_bounds=_parse_array_bounds(element),
         restrictions=_parse_restrictions(element),
     )
+
+
+def _parse_array_bounds(element: etree._Element) -> tuple[int | None, int | None]:
+    for child in element:
+        if isinstance(child.tag, str) and _local(child.tag) == "array":
+            low = child.get("minimumSize")
+            high = child.get("maximumSize")
+            return (int(low) if low is not None else None,
+                    int(high) if high is not None else None)
+    return (None, None)
 
 
 def _parse_restrictions(element: etree._Element) -> Restrictions | None:

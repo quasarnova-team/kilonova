@@ -16,14 +16,14 @@ work against it unmodified.
 A *kilonova* is the luminous flash of a neutron-star merger — a lighter, faster transient
 in the nova family. This kilonova is the pure-Python engine of the
 [quasarnova](https://github.com/quasarnova-team) family: successor of
-[MilkyWay](https://github.com/quasar-team/MilkyWay) (Piotr Nikiel's 2021 prototype, and
-briefly named microquasar), rebuilt from scratch on
+[MilkyWay](https://github.com/quasar-team/MilkyWay) (Piotr Nikiel's 2021 pure-Python
+prototype; this rewrite was briefly named microquasar), rebuilt from scratch on
 [asyncua](https://github.com/FreeOpcUa/opcua-asyncio) 2.x.
 
 Basic usage mode
 ----------------
 
-1. Install (Python ≥ 3.10): `pip install .` (from this repository, for now)
+1. Install (Python ≥ 3.10): `pip install kilonova`
 1. Run your existing quasar server's design, unchanged:
    `kilonova run --design Design/Design.xml --config bin/config.xml`
 1. Point any OPC UA client at `opc.tcp://host:4841` — the address space is quasar's.
@@ -55,8 +55,9 @@ What works
 All 12 cases of quasar's own CI test suite pass against the reference nodesets
 (cache/source/calculated variables, methods incl. arguments, config entries and
 restrictions, singleVariableNode, design/config instantiation, StandardMetaData).
-Production designs (ATLAS ATCA, CAEN, CanOpen) were probed at structural parity against
-live C++ servers of both backends. Details: [doc/Parity.md](doc/Parity.md).
+Production designs were probed against live C++ servers of both backends: ATCA and CAEN at
+full structural parity; CanOpen surfaced two genuine C++ cross-backend quirks (kilonova sides
+with one backend on each). Details: [doc/Parity.md](doc/Parity.md).
 
 Limitations
 -----------
@@ -74,12 +75,16 @@ Documentation
 - [doc/Architecture.md](doc/Architecture.md) — modules and data flow
 - [doc/DeviceLogic.md](doc/DeviceLogic.md) — the user API
 - [doc/Parity.md](doc/Parity.md) — the parity contract and current status
-- [PLAN.md](PLAN.md) — milestone log and engineering notes
+- [PLAN.md](PLAN.md) — milestone log, parity backlog, engineering notes
+- [CHANGELOG.md](CHANGELOG.md) — release history
+- quasar framework documentation: https://quasar.docs.cern.ch
 
 Credits
 -------
 
 - Paris Moschovakos (paris@moschovakos.com) — kilonova
 - Piotr Nikiel — quasar concept and architecture; MilkyWay, the predecessor
+
+Contact: paris@moschovakos.com
 
 License: BSD-2-Clause.

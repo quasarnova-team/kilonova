@@ -3,8 +3,9 @@
 For every case in quasar/.CI/test_cases/manifest.json we serve the case's
 Design + config in-process, dump the address space through a real client
 connection, and compare against the case's reference_ns2.xml with the same
-semantics as quasar's NodeSetTools comparison. StandardMetaData is ignored
-until M10.
+semantics as quasar's NodeSetTools comparison. StandardMetaData is compared in
+full for default_design (its reference is the meta oracle) and ignored elsewhere,
+exactly like quasar's own CI.
 """
 
 from __future__ import annotations

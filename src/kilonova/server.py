@@ -42,7 +42,7 @@ class Server:
         design_path: str | Path,
         config_path: str | Path | None = None,
         endpoint: str = DEFAULT_ENDPOINT,
-        namespace_uri: str = "urn:cern:quasar:opcua",
+        namespace_uri: str = "OPCUASERVER",  # the URI C++ quasar publishes at ns=2
     ) -> None:
         self._design_path = Path(design_path)
         self._config_path = Path(config_path) if config_path else None
@@ -326,7 +326,8 @@ class Server:
         objects_folder = self.ua_server.nodes.objects
         for fv in configuration.free_variables:
             await engine.add_free_variable(
-                objects_folder, "", fv.name, fv.data_type, fv.initial_value
+                objects_folder, "", fv.name, fv.data_type, fv.initial_value,
+                fv.access_level,
             )
         for calc in configuration.calculated_variables:
             await engine.add_calculated_variable(objects_folder, "", calc.name, calc.formula)

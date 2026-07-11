@@ -35,6 +35,7 @@ class FreeVariable:
     name: str
     data_type: str  # plain OPC UA type name: Double, Int32, ...
     initial_value: str | None = None
+    access_level: str = "RW"  # R | RW | W
 
 
 @dataclass
@@ -127,6 +128,7 @@ def _parse_free_variable(element: etree._Element) -> FreeVariable:
         name=element.get("name"),
         data_type=element.get("type", "Double"),
         initial_value=element.get("initialValue"),
+        access_level=element.get("accessLevel", "RW"),
     )
 
 
@@ -198,7 +200,28 @@ def _parse_instance(
             )
         else:
             raise ConfigurationError(f"{where}: unexpected child element <{tag}>")
+    _check_key_uniqueness(instance, design, where)
     return instance
+
+
+def _check_key_uniqueness(instance: Instance, design: Design, where: str) -> None:
+    """isKey config entries must be unique among same-class siblings (xs:unique)."""
+    seen: dict[tuple[str, str], set[str]] = {}
+    for child in instance.children:
+        child_class = design.classes[child.class_name]
+        for entry in child_class.config_entries:
+            if not entry.is_key:
+                continue
+            value = child.attributes.get(entry.name, entry.default_value)
+            if value is None:
+                continue
+            bucket = seen.setdefault((child.class_name, entry.name), set())
+            if value in bucket:
+                raise ConfigurationError(
+                    f"{where}: duplicate key {entry.name}={value!r} among "
+                    f"<{child.class_name}> children"
+                )
+            bucket.add(value)
 
 
 def _parse_array_values(element: etree._Element, where: str) -> list[str]:

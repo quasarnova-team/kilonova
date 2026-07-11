@@ -3,8 +3,7 @@
 What is this?
 -------------
 
-How a Design file becomes a served address space. One page; the code is small
-(~1500 lines) and each module has one job.
+How a Design file becomes a served address space. One page; each module has one job.
 
 Data flow
 ---------
@@ -34,7 +33,8 @@ Modules
 | `calculated.py` | Config-level CalculatedVariables/FreeVariables: whitelisted-AST formulas (no `eval`), datachange-driven recalculation. |
 | `meta.py` | StandardMetaData, live: log-level nodes drive Python logging. |
 | `dump.py` | Client-side NodeSet2 dump + reference comparison (the conformance gate). |
-| `cli.py` | `kilonova run` / `kilonova dump`. |
+| `cli.py` | `kilonova run` / `kilonova dump`, clean SIGTERM shutdown. |
+| `errors.py` | `KilonovaError` base; `DesignError`, `ConfigurationError`. |
 
 Design decisions
 ----------------

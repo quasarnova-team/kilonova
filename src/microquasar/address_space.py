@@ -130,7 +130,14 @@ class AddressSpaceBuilder:
         browse_name = ua.QualifiedName(instance.name, self._ns)
         _log.debug("instantiating %s %r", klass.name, address)
 
-        if klass.single_variable_node:
+        if klass.single_variable_node and klass.source_variables:
+            sv = klass.source_variables[0]
+            node = await self._add_source_variable_node(
+                parent_node, node_id, browse_name, address, sv
+            )
+            quasar_object = QuasarObject(self._server, klass, node, address)
+            quasar_object.source_variables[sv.name] = node
+        elif klass.single_variable_node:
             node = await self._add_single_variable_node(
                 parent_node, node_id, browse_name, klass, instance
             )
@@ -224,16 +231,25 @@ class AddressSpaceBuilder:
     async def _add_source_variable(
         self, object_node: Node, parent_address: str, sv: SourceVariable
     ) -> Node:
+        address = f"{parent_address}.{sv.name}"
+        return await self._add_source_variable_node(
+            object_node, ua.NodeId(address, self._ns),
+            ua.QualifiedName(sv.name, self._ns), address, sv,
+        )
+
+    async def _add_source_variable_node(
+        self, parent_node: Node, node_id: ua.NodeId, browse_name: ua.QualifiedName,
+        address: str, sv: SourceVariable,
+    ) -> Node:
         """Source variables delegate reads/writes to device logic; until the first
         interaction they hold a null value with BadWaitingForInitialData."""
-        address = f"{parent_address}.{sv.name}"
         initial = ua.DataValue(
             ua.Variant(None, ua.VariantType.Null),
             ua.StatusCode(ua.StatusCodes.BadWaitingForInitialData),
         )
-        node = await object_node.add_variable(
-            ua.NodeId(address, self._ns),
-            ua.QualifiedName(sv.name, self._ns),
+        node = await parent_node.add_variable(
+            node_id,
+            browse_name,
             initial.Value,
             # source variables always expose the concrete design type (per oracle)
             datatype=oracle.data_type_node_id(sv.data_type),

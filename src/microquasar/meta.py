@@ -92,9 +92,11 @@ async def build_standard_meta_data(
     pool = await add_object(smd, "StandardMetaData.SourceVariableThreadPool",
                             "SourceVariableThreadPool")
     for var in ("minThreads", "maxThreads"):
-        # asyncio has no source-variable thread pool: served as 0
+        # String, matching the live C++ servers (probed 2026-07-11; the checked-in
+        # reference nodesets disagree among themselves on this type).
+        # asyncio has no source-variable thread pool: served as "0".
         await add_var(pool, f"StandardMetaData.SourceVariableThreadPool.{var}",
-                      var, 0, uint32_t)
+                      var, "0", string_t)
 
     quasar_obj = await add_object(smd, "StandardMetaData.Quasar", "Quasar")
     await add_var(quasar_obj, "StandardMetaData.Quasar.version", "version",

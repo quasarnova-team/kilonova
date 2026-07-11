@@ -22,7 +22,7 @@ async def test_log_level_variable_drives_python_logging(sca_client):
 async def test_meta_subtree_shape(sca_client):
     for address, expected_type in (
         ("StandardMetaData.Quasar.version", ua.VariantType.String),
-        ("StandardMetaData.SourceVariableThreadPool.maxThreads", ua.VariantType.UInt32),
+        ("StandardMetaData.SourceVariableThreadPool.maxThreads", ua.VariantType.String),
         ("StandardMetaData.BuildInformation.ToolkitLibs", ua.VariantType.String),
     ):
         node = sca_client.get_node(ua.NodeId(address, 2))

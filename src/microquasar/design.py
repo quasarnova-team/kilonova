@@ -372,9 +372,12 @@ def _validate(design: Design) -> None:
                 raise DesignError(
                     f"class {klass.name}: hasobjects refers to unknown class {rel.class_name}"
                 )
-        if klass.single_variable_node and len(klass.cache_variables) != 1:
+        if klass.single_variable_node and (
+            len(klass.cache_variables) + len(klass.source_variables) != 1
+        ):
             raise DesignError(
-                f"class {klass.name}: singleVariableNode requires exactly one cache variable"
+                f"class {klass.name}: singleVariableNode requires exactly one "
+                "cache variable or source variable"
             )
         for cv in klass.cache_variables:
             if cv.is_array and cv.initial_value is not None:

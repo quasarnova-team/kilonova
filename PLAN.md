@@ -39,6 +39,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | done |
 | M11 | Config restrictions + cardinality validation | invalid config rejected like C++ Configurator | done |
 | M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against microquasar | generated client works unmodified | pending |
+| M13 | parity-night third backend column (production servers) | probe parity vs live C++ backends | done — ATCA/CAEN full structural parity; CanOpen surfaced 2 cross-backend quirks (see .parity-night/cells/*-microquasar/deps-note.txt) |
 
 ## Current parity table (M6 gate, StandardMetaData ignored)
 

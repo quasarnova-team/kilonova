@@ -228,10 +228,7 @@ class CalculatedVariablesEngine:
             except ArithmeticError:
                 good = False
                 bad_status = ua.StatusCodes.Bad
-        if good:
-            new = (result, ua.StatusCodes.Good)
-        else:
-            new = (None, bad_status)
+        new = (result, ua.StatusCodes.Good) if good else (None, bad_status)
         if self._last.get(address) == new:
             return  # unchanged: stop propagation (also breaks accidental cycles)
         self._last[address] = new

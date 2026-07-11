@@ -16,7 +16,11 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
   `AccessLevel`) must match exactly. Format rules learned from uasak_dump: NS0 ids as `i=N`,
   quasar ids as `ns=2;s=path`, XSD-default attributes suppressed (DataType `i=24`,
   ValueRank `-1`, AccessLevel `1`);
-- `StandardMetaData` nodes are ignored until the StandardMetaData milestone lands.
+- `StandardMetaData` is compared in full for the `default_design` case (its reference is
+  the meta oracle); for the other cases it is ignored exactly as quasar's own CI does —
+  their references carry stale, mutually contradictory meta snapshots (minThreads i=7 vs
+  i=12). microquasar's meta is live: log-level variables drive the Python loggers, and
+  `<StandardMetaData>` config sections set initial levels.
 
 ## Milestones
 
@@ -32,7 +36,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M7 | Methods: nodes + real async handlers (decorator API) | Client calls method, gets result | done |
 | M8 | Source variables + delegated-write callbacks | Client read/write triggers user coroutine | done |
 | M9 | CalculatedVariables (safe formula eval) | Client reads computed value | done |
-| M10 | StandardMetaData subtree | default_design case passes un-ignored | pending |
+| M10 | StandardMetaData subtree | default_design case passes un-ignored | done |
 | M11 | Config XSD validation + restrictions | invalid config rejected like C++ Configurator | pending |
 | M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against microquasar | generated client works unmodified | pending |
 
@@ -43,7 +47,7 @@ As of M6 (all verified by `pytest tests/conformance`, 2026-07-11):
 
 | quasar CI case | verdict |
 |----------------|---------|
-| default_design | PASS |
+| default_design | PASS (full comparison incl. StandardMetaData) |
 | methods | PASS |
 | async_methods | PASS |
 | cache_variables | PASS |

@@ -12,7 +12,7 @@ import asyncua
 from asyncua import ua
 from asyncua.common.callback import CallbackType
 
-from microquasar import oracle
+from microquasar import meta, oracle
 from microquasar.address_space import AddressSpaceBuilder
 from microquasar.calculated import CalculatedVariablesEngine
 from microquasar.config import Configuration, load_config
@@ -315,6 +315,13 @@ class Server:
         for name, formula in configuration.generic_formulas.items():
             engine.register_generic_formula(name, formula)
         await builder.instantiate_from_config(configuration.instances)
+
+        await meta.build_standard_meta_data(
+            self.ua_server,
+            namespace_index,
+            general_log_level=configuration.general_log_level,
+            component_log_levels=configuration.component_log_levels,
+        )
 
         objects_folder = self.ua_server.nodes.objects
         for fv in configuration.free_variables:

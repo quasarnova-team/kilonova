@@ -64,8 +64,13 @@ async def test_parity_with_quasar_reference(case):
     async with server:
         dump = await dump_address_space(url)
 
+    # quasar's own CI ignores StandardMetaData everywhere (the references carry
+    # stale, mutually-contradictory meta snapshots — e.g. minThreads is i=7 in one
+    # ref and i=12 in another). We go one step further than C++: default_design's
+    # reference IS the meta oracle, so that case is compared in full.
+    ignore = () if case["name"] == "default_design" else ("StandardMetaData",)
     failures = compare_nodesets(
-        load_nodeset(str(oracle_path)), dump, ignore_nodeid_substrings=("StandardMetaData",)
+        load_nodeset(str(oracle_path)), dump, ignore_nodeid_substrings=ignore
     )
     assert not failures, (
         f"{len(failures)} parity failure(s) vs {oracle_path.name}:\n" + "\n".join(failures)

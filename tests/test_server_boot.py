@@ -29,5 +29,5 @@ async def test_no_config_means_no_instances():
     server, url = make_server(config=None)
     async with server, Client(url=url) as client:
         children = await client.nodes.objects.get_children()
-        ns2 = [n for n in children if n.nodeid.NamespaceIndex == 2]
-        assert ns2 == []
+        ns2 = [n.nodeid.Identifier for n in children if n.nodeid.NamespaceIndex == 2]
+        assert ns2 == ["StandardMetaData"]  # meta only, no design instances

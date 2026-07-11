@@ -66,6 +66,8 @@ class Configuration:
     free_variables: list[FreeVariable] = field(default_factory=list)
     calculated_variables: list[CalculatedVariableConfig] = field(default_factory=list)
     generic_formulas: dict[str, str] = field(default_factory=dict)
+    general_log_level: str | None = None
+    component_log_levels: dict[str, str] = field(default_factory=dict)
 
 
 def load_config(path: str | Path, design: Design) -> Configuration:
@@ -84,7 +86,9 @@ def load_config(path: str | Path, design: Design) -> Configuration:
         if not isinstance(child.tag, str):
             continue
         tag = child.tag.replace(_C, "")
-        if tag in _FRAMEWORK_ELEMENTS:
+        if tag == "StandardMetaData":
+            _parse_standard_meta_data(child, configuration)
+        elif tag in _FRAMEWORK_ELEMENTS:
             _log.info("config: skipping framework element %s (not instantiable)", tag)
         elif tag == "FreeVariable":
             configuration.free_variables.append(_parse_free_variable(child))
@@ -106,6 +110,16 @@ def load_config(path: str | Path, design: Design) -> Configuration:
                 f"configuration root: <{tag}> is not a class of the Design"
             )
     return configuration
+
+
+def _parse_standard_meta_data(element: etree._Element, configuration: Configuration) -> None:
+    """Initial log levels: <Log><GeneralLogLevel logLevel=../> + <ComponentLogLevel .../>."""
+    for general in element.iter(f"{_C}GeneralLogLevel"):
+        configuration.general_log_level = general.get("logLevel")
+    for component in element.iter(f"{_C}ComponentLogLevel"):
+        configuration.component_log_levels[component.get("componentName")] = (
+            component.get("logLevel")
+        )
 
 
 def _parse_free_variable(element: etree._Element) -> FreeVariable:

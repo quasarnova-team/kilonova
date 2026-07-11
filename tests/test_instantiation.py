@@ -15,7 +15,10 @@ async def test_objects_resolve_by_quasar_nodeid(sca_client):
 
 async def test_hierarchy_matches_config(sca_client):
     objects = sca_client.nodes.objects
-    top = [n for n in await objects.get_children() if n.nodeid.NamespaceIndex == 2]
+    top = [
+        n for n in await objects.get_children()
+        if n.nodeid.NamespaceIndex == 2 and n.nodeid.Identifier != "StandardMetaData"
+    ]
     assert [n.nodeid.Identifier for n in top] == ["sca1"]
 
     sca1 = top[0]

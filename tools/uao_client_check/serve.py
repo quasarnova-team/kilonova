@@ -1,6 +1,9 @@
-import asyncio, sys
+import asyncio
+import sys
+
 sys.path.insert(0, "/Users/paris/code/quasar-team/kilonova/src")
 from kilonova import Server
+
 
 async def main():
     server = Server(

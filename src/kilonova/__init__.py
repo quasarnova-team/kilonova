@@ -7,6 +7,6 @@ identical address space the C++ quasar framework would, with no code generation.
 from kilonova.design import Design
 from kilonova.server import Server
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 __all__ = ["Design", "Server", "__version__"]

@@ -69,3 +69,10 @@ async def test_client_write_respects_access_level(sca_client):
     online = node(sca_client, "sca1.online")
     with pytest.raises(ua.UaStatusCodeError):
         await online.write_value(ua.Variant(1, ua.VariantType.UInt32))
+
+
+async def test_array_dimensions_attribute(sca_client):
+    """C++ parity: array cache variables carry a one-element ArrayDimensions."""
+    channels = node(sca_client, "sca1.channels")
+    dims = (await channels.read_attribute(ua.AttributeIds.ArrayDimensions)).Value.Value
+    assert dims == [0]

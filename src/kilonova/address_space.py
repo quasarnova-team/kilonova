@@ -369,6 +369,13 @@ class AddressSpaceBuilder:
         )
 
     async def _finalize_variable(self, node: Node, cv: CacheVariable, dv: ua.DataValue) -> None:
+        if cv.is_array:
+            # C++ quasar sets a one-element ArrayDimensions on every array variable
+            await self._server.write_attribute_value(
+                node.nodeid,
+                ua.DataValue(ua.Variant([0], ua.VariantType.UInt32)),
+                ua.AttributeIds.ArrayDimensions,
+            )
         rank = self._value_rank(cv.is_array, cv.data_type)
         await self._server.write_attribute_value(
             node.nodeid,

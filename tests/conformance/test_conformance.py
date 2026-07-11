@@ -25,9 +25,7 @@ QUASAR_ROOT = Path(
 CASES_DIR = QUASAR_ROOT / ".CI" / "test_cases"
 
 # Cases whose features are planned but not implemented yet (see PLAN.md).
-NOT_YET: dict[str, str] = {
-    "calculated_variables": "M9: calculated variables",
-}
+NOT_YET: dict[str, str] = {}
 
 pytestmark = pytest.mark.skipif(
     not (CASES_DIR / "manifest.json").exists(),

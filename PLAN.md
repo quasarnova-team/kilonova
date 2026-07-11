@@ -31,7 +31,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M6 | Conformance runner + dumper (uasak_dump equivalent) | parity table over quasar CI cases | done |
 | M7 | Methods: nodes + real async handlers (decorator API) | Client calls method, gets result | done |
 | M8 | Source variables + delegated-write callbacks | Client read/write triggers user coroutine | done |
-| M9 | CalculatedVariables (safe formula eval) | Client reads computed value | pending |
+| M9 | CalculatedVariables (safe formula eval) | Client reads computed value | done |
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | pending |
 | M11 | Config XSD validation + restrictions | invalid config rejected like C++ Configurator | pending |
 | M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against microquasar | generated client works unmodified | pending |
@@ -54,7 +54,7 @@ As of M6 (all verified by `pytest tests/conformance`, 2026-07-11):
 | config_restrictions | PASS |
 | defaulted_instance_name | PASS |
 | source_variables | PASS |
-| calculated_variables | xfail (M9) |
+| calculated_variables | PASS |
 
 Method *nodes* (incl. `.args`/`.return_values` argument properties) are at parity as part of
 M6; M7 added callable handlers via the `@server.method("sca1.scale")` decorator API.
@@ -67,6 +67,13 @@ writes to source variables and `addressSpaceWrite="delegated"` cache variables b
 writes answer BadNotImplemented). AccessLevel encodes the design's read/write modes
 (read-only 1, write-only 2, read-write 3); until first device interaction source variables
 serve BadWaitingForInitialData. Server-side `set_cv` bypasses delegation by design.
+
+M9 (calculated variables): config-level `<FreeVariable>`, `<CalculatedVariable>` and
+`<CalculatedVariableGenericFormula>` are served; formulas compile to a whitelisted AST (no
+eval), inputs are dotted addresses, `$thisObjectAddress` and `$applyGenericFormula(...)`
+are substituted, and recalculation runs through server-side datachange callbacks — a
+dependent recomputes *inside* the write that changed its input, so the next read is fresh.
+Any null/bad input yields BadWaitingForInitialData. **All 12 quasar CI oracle cases now pass.**
 
 ## Design decisions (2026 rewrite, vs the 2021 MilkyWay prototype)
 

@@ -45,11 +45,13 @@ class AddressSpaceBuilder:
         design: Design,
         namespace_index: int,
         method_dispatcher_factory=None,
+        calculated_engine=None,
     ):
         self._server = ua_server
         self._design = design
         self._ns = namespace_index
         self._make_dispatcher = method_dispatcher_factory
+        self._calculated = calculated_engine
         self._type_nodes: dict[str, Node] = {}
         #: All instantiated objects keyed by their dotted string address.
         self.objects: dict[str, QuasarObject] = {}
@@ -96,7 +98,10 @@ class AddressSpaceBuilder:
     ) -> QuasarObject:
         klass = self._design.classes[instance.class_name]
         if klass.calculated_variables:
-            raise DesignError(f"class {klass.name}: calculated variables not supported yet (M9)")
+            raise DesignError(
+                f"class {klass.name}: Design-level calculated variables are not supported"
+                " yet — declare them in the configuration instead"
+            )
         address = instance.name if parent_address is None else f"{parent_address}.{instance.name}"
         node_id = ua.NodeId(address, self._ns)
         browse_name = ua.QualifiedName(instance.name, self._ns)
@@ -127,6 +132,16 @@ class AddressSpaceBuilder:
                 await self._add_method(node, address, method)
 
         self.objects[address] = quasar_object
+
+        if self._calculated is not None:
+            for fv in instance.free_variables:
+                await self._calculated.add_free_variable(
+                    node, address, fv.name, fv.data_type, fv.initial_value
+                )
+            for calc in instance.calculated_variables:
+                await self._calculated.add_calculated_variable(
+                    node, address, calc.name, calc.formula
+                )
 
         # children from the configuration...
         for child in instance.children:

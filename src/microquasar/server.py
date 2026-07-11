@@ -14,7 +14,8 @@ from asyncua.common.callback import CallbackType
 
 from microquasar import oracle
 from microquasar.address_space import AddressSpaceBuilder
-from microquasar.config import Instance, load_config
+from microquasar.calculated import CalculatedVariablesEngine
+from microquasar.config import Configuration, load_config
 from microquasar.design import Design, Method
 from microquasar.errors import MicroquasarError
 from microquasar.objects import QuasarObject
@@ -297,19 +298,32 @@ class Server:
                 f"got {namespace_index}"
             )
 
+        engine = CalculatedVariablesEngine(self.ua_server, namespace_index)
         builder = AddressSpaceBuilder(
             self.ua_server,
             self.design,
             namespace_index,
             method_dispatcher_factory=self._make_method_dispatcher,
+            calculated_engine=engine,
         )
         await builder.build_types()
         await builder.instantiate_root_design_objects()
 
-        instances: list[Instance] = []
+        configuration = Configuration()
         if self._config_path is not None:
-            instances = load_config(self._config_path, self.design)
-        await builder.instantiate_from_config(instances)
+            configuration = load_config(self._config_path, self.design)
+        for name, formula in configuration.generic_formulas.items():
+            engine.register_generic_formula(name, formula)
+        await builder.instantiate_from_config(configuration.instances)
+
+        objects_folder = self.ua_server.nodes.objects
+        for fv in configuration.free_variables:
+            await engine.add_free_variable(
+                objects_folder, "", fv.name, fv.data_type, fv.initial_value
+            )
+        for calc in configuration.calculated_variables:
+            await engine.add_calculated_variable(objects_folder, "", calc.name, calc.formula)
+        await engine.wire_and_evaluate()
 
         self.objects = builder.objects
         self._source_specs = builder.source_variables

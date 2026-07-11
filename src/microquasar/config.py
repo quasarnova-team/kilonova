@@ -29,6 +29,23 @@ _FRAMEWORK_ELEMENTS = {"StandardMetaData", "CalculatedVariables"}
 
 
 @dataclass
+class FreeVariable:
+    """A config-level <FreeVariable> — a standalone writable variable."""
+
+    name: str
+    data_type: str  # plain OPC UA type name: Double, Int32, ...
+    initial_value: str | None = None
+
+
+@dataclass
+class CalculatedVariableConfig:
+    """A config-level <CalculatedVariable> — a formula over other variables."""
+
+    name: str
+    formula: str
+
+
+@dataclass
 class Instance:
     """One object instance declared in config.xml (or defaulted from the Design)."""
 
@@ -37,10 +54,22 @@ class Instance:
     attributes: dict[str, str] = field(default_factory=dict)
     array_values: dict[str, list[str]] = field(default_factory=dict)
     children: list[Instance] = field(default_factory=list)
+    free_variables: list[FreeVariable] = field(default_factory=list)
+    calculated_variables: list[CalculatedVariableConfig] = field(default_factory=list)
 
 
-def load_config(path: str | Path, design: Design) -> list[Instance]:
-    """Parse config.xml into a list of top-level instances."""
+@dataclass
+class Configuration:
+    """A fully parsed config.xml."""
+
+    instances: list[Instance] = field(default_factory=list)
+    free_variables: list[FreeVariable] = field(default_factory=list)
+    calculated_variables: list[CalculatedVariableConfig] = field(default_factory=list)
+    generic_formulas: dict[str, str] = field(default_factory=dict)
+
+
+def load_config(path: str | Path, design: Design) -> Configuration:
+    """Parse config.xml into instances plus calculated/free variables."""
     tree = etree.parse(str(path))
     root = tree.getroot()
     if root.tag != f"{_C}configuration":
@@ -50,29 +79,47 @@ def load_config(path: str | Path, design: Design) -> list[Instance]:
         for rel in design.root_has_objects
         if rel.instantiate_using == "configuration"
     }
-    return _parse_children(root, design, allowed, where="configuration root")
-
-
-def _parse_children(
-    element: etree._Element, design: Design, allowed_classes: set[str], where: str
-) -> list[Instance]:
-    instances = []
-    for child in element:
+    configuration = Configuration()
+    for child in root:
         if not isinstance(child.tag, str):
             continue
         tag = child.tag.replace(_C, "")
         if tag in _FRAMEWORK_ELEMENTS:
             _log.info("config: skipping framework element %s (not instantiable)", tag)
-            continue
-        if tag not in design.classes:
-            raise ConfigurationError(f"{where}: <{tag}> is not a class of the Design")
-        if tag not in allowed_classes:
-            raise ConfigurationError(
-                f"{where}: <{tag}> is not declared in hasobjects "
-                f"(allowed here: {sorted(allowed_classes) or 'none'})"
+        elif tag == "FreeVariable":
+            configuration.free_variables.append(_parse_free_variable(child))
+        elif tag == "CalculatedVariable":
+            configuration.calculated_variables.append(_parse_calculated_variable(child))
+        elif tag == "CalculatedVariableGenericFormula":
+            configuration.generic_formulas[child.get("name")] = child.get("formula")
+        elif tag in design.classes:
+            if tag not in allowed:
+                raise ConfigurationError(
+                    f"configuration root: <{tag}> is not declared in hasobjects "
+                    f"(allowed here: {sorted(allowed) or 'none'})"
+                )
+            configuration.instances.append(
+                _parse_instance(child, design.classes[tag], design)
             )
-        instances.append(_parse_instance(child, design.classes[tag], design))
-    return instances
+        else:
+            raise ConfigurationError(
+                f"configuration root: <{tag}> is not a class of the Design"
+            )
+    return configuration
+
+
+def _parse_free_variable(element: etree._Element) -> FreeVariable:
+    return FreeVariable(
+        name=element.get("name"),
+        data_type=element.get("type", "Double"),
+        initial_value=element.get("initialValue"),
+    )
+
+
+def _parse_calculated_variable(element: etree._Element) -> CalculatedVariableConfig:
+    return CalculatedVariableConfig(
+        name=element.get("name"), formula=element.get("value")
+    )
 
 
 def _parse_instance(
@@ -119,6 +166,10 @@ def _parse_instance(
             instance.array_values[tag] = _parse_array_values(child, where)
         elif tag in _FRAMEWORK_ELEMENTS:
             _log.info("config: skipping framework element %s inside %s", tag, where)
+        elif tag == "FreeVariable":
+            instance.free_variables.append(_parse_free_variable(child))
+        elif tag == "CalculatedVariable":
+            instance.calculated_variables.append(_parse_calculated_variable(child))
         elif tag in child_classes:
             instance.children.append(_parse_instance(child, design.classes[tag], design))
         elif tag in design.classes:

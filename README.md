@@ -1,56 +1,81 @@
 # microquasar
 
-**Pure-Python OPC UA servers from quasar Design files — a quasar in miniature.**
+What is this?
+-------------
 
-A *microquasar* is a stellar-mass object inside the Milky Way whose accretion disk and
-relativistic jets reproduce quasar physics in miniature. That is precisely this project:
-a small, pure-Python engine that lives in the [MilkyWay](https://github.com/quasar-team/MilkyWay)
-lineage and behaves exactly like [quasar](https://github.com/quasar-team/quasar) — it loads a
-standard quasar `Design.xml` and `config.xml` and serves the identical OPC UA address space,
-with **no code generation and no C++**.
+microquasar serves a quasar `Design.xml` + `config.xml` as a live OPC UA server in pure
+Python — no code generation, no C++. It produces the same address space as a
+[quasar](https://github.com/quasar-team/quasar)-generated server (same `ns=2` string NodeIds,
+same dotted `parent.child` addressing), so quasar ecosystem tools —
+[Cacophony](https://github.com/quasar-team/Cacophony)/WinCC OA,
+[UaoForQuasar](https://github.com/quasar-team/UaoForQuasar) clients, plain OPC UA clients —
+work against it unmodified.
 
-Because the served address space uses quasar's addressing (`ns=2` string NodeIds with dotted
-`parent.child` paths), everything downstream of a quasar server keeps working:
-[UaoForQuasar](https://github.com/quasar-team/UaoForQuasar) clients,
-[Cacophony](https://github.com/quasar-team/Cacophony)/WinCC OA integration, and plain OPC UA
-clients that know quasar conventions.
+A *microquasar* is a stellar-mass object inside the Milky Way reproducing quasar physics in
+miniature; this project is the successor of
+[MilkyWay](https://github.com/quasar-team/MilkyWay) (Piotr Nikiel's 2021 pure-Python
+prototype), rebuilt from scratch on [asyncua](https://github.com/FreeOpcUa/opcua-asyncio) 2.x.
 
-## Quick start
+Basic usage mode
+----------------
 
-```bash
-pip install microquasar          # not yet on PyPI — install from source for now
-microquasar run --design Design.xml --config config.xml
-```
+1. Install (Python ≥ 3.10): `pip install .` (from this repository, for now)
+1. Run your existing quasar server's design, unchanged:
+   `microquasar run --design Design/Design.xml --config bin/config.xml`
+1. Point any OPC UA client at `opc.tcp://host:4841` — the address space is quasar's.
+1. Dump a running server's address space (uasak_dump-style NodeSet2):
+   `microquasar dump --endpoint opc.tcp://127.0.0.1:4841 --output dump.xml`
 
-Or from Python, async-first:
+Device logic is plain Python (see [doc/DeviceLogic.md](doc/DeviceLogic.md)):
 
 ```python
-import asyncio
 from microquasar import Server
 
-async def main():
-    server = Server("Design.xml", config_path="config.xml")
-    async with server:
-        sca1 = server.objects["sca1"]
-        while True:
-            await asyncio.sleep(1)
-            await sca1.setOnline(42)   # typed setter, generated from the Design
+server = Server("Design.xml", config_path="config.xml")
 
-asyncio.run(main())
+@server.read("sca1.adc")                 # source variable: runs inside the client read
+async def read_adc(obj):
+    return await hardware.read_adc()
+
+@server.method("sca1.reset")             # method handler
+async def reset(obj):
+    await obj.setOnline(0)               # generated setter, quasar naming
+
+async with server:
+    ...
 ```
 
-## Parity is the product
+What works
+----------
 
-microquasar's definition of done is **oracle parity with C++ quasar**: for every test case in
-quasar's own CI suite (`quasar/.CI/test_cases/`), microquasar must serve an address space whose
-client-side NodeSet2 dump matches the case's `reference_ns2.xml`. See `PLAN.md` for the
-milestone-by-milestone roadmap and the current parity table.
+All 12 cases of quasar's own CI test suite pass against the reference nodesets
+(cache/source/calculated variables, methods incl. arguments, config entries and
+restrictions, singleVariableNode, design/config instantiation, StandardMetaData).
+Production designs (ATLAS ATCA, CAEN, CanOpen) were probed at structural parity against
+live C++ servers of both backends. Details: [doc/Parity.md](doc/Parity.md).
 
-## Lineage
+Limitations
+-----------
 
-quasar → MilkyWay (Piotr Nikiel's 2021 pure-Python prototype) → **microquasar** (2026, from
-scratch on [asyncua](https://github.com/FreeOpcUa/opcua-asyncio) 2.x).
+- Device logic is registered per address at runtime — there is no generated `D<Class>`
+  skeleton (that is the point).
+- Design-mandated children are instantiated unconditionally; C++ device logic may create
+  some conditionally.
+- No server-side security policies yet (NoSecurity endpoint only).
+- Values live in asyncua's address space; extreme write rates were not a design goal.
 
-## License
+Documentation
+-------------
 
-BSD-2-Clause.
+- [doc/Architecture.md](doc/Architecture.md) — modules and data flow
+- [doc/DeviceLogic.md](doc/DeviceLogic.md) — the user API
+- [doc/Parity.md](doc/Parity.md) — the parity contract and current status
+- [PLAN.md](PLAN.md) — milestone log and engineering notes
+
+Credits
+-------
+
+- Paris Moschovakos (paris@moschovakos.com) — microquasar
+- Piotr Nikiel — quasar concept and architecture; MilkyWay, the predecessor
+
+License: BSD-2-Clause.

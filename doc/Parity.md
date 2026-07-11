@@ -57,6 +57,7 @@ Ecosystem cross-checks
 - Cacophony: `tools/cacophony_crosscheck.py` verifies every periphery address the
   generated `configParser.ctl` would assign resolves on a live kilonova —
   600/600 on the production ATCA design.
-- UaoForQuasar: client classes generate cleanly from production designs; the generated
-  NodeId construction is exactly kilonova's addressing. Compile/run of the C++ client
-  needs UASDK (docker) — pending.
+- UaoForQuasar: proven live (2026-07-11). A generated C++ client, compiled against the
+  commercial UASDK in the production el9 image, connected to kilonova serving the ATCA
+  design and read back a value set by python device logic (tools/uao_client_check).
+  The remaining ecosystem leg is a live WinCC OA connection, which needs lab access.

@@ -1,8 +1,12 @@
 """v1 scale gate: a 2000-variable server under sustained load, bounded memory."""
 
 import asyncio
-import resource
 import time
+
+try:
+    import resource  # POSIX only; on Windows the memory bound is skipped
+except ImportError:  # pragma: no cover
+    resource = None
 
 import pytest
 from asyncua import Client, ua
@@ -48,7 +52,8 @@ async def test_two_thousand_variables_under_load(tmp_path):
     async with server:
         boot_seconds = time.monotonic() - boot_start
         assert len(server.objects) == INSTANCES
-        rss_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        rss_before = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                      if resource else 0)
 
         async with Client(url=url) as client:
             # every variable resolvable through the client
@@ -85,7 +90,8 @@ async def test_two_thousand_variables_under_load(tmp_path):
             await asyncio.sleep(0.5)
             await subscription.delete()
 
-        rss_after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        rss_after = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                     if resource else 0)
         growth_mb = (rss_after - rss_before) / (1024 * 1024)
 
     assert writes > 2000, f"only {writes} writes in the window"

@@ -149,7 +149,9 @@ def compile_formula(text: str, aliases: dict[str, str] | None = None) -> Compile
                 and node.func.id in _FUNCTIONS and not node.keywords:
             for argument in node.args:
                 validate(argument)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) or isinstance(node, ast.Name) and node.id in _CONSTANTS:
+        elif (isinstance(node, ast.Constant) and isinstance(node.value, (int, float))) or (
+            isinstance(node, ast.Name) and node.id in _CONSTANTS
+        ):
             pass
         elif (address := _address_of(node)) is not None:
             address = aliases.get(address, address)

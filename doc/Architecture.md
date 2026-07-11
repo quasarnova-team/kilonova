@@ -34,7 +34,7 @@ Modules
 | `calculated.py` | Config-level CalculatedVariables/FreeVariables: whitelisted-AST formulas (no `eval`), datachange-driven recalculation. |
 | `meta.py` | StandardMetaData, live: log-level nodes drive Python logging. |
 | `dump.py` | Client-side NodeSet2 dump + reference comparison (the conformance gate). |
-| `cli.py` | `microquasar run` / `microquasar dump`. |
+| `cli.py` | `kilonova run` / `kilonova dump`. |
 
 Design decisions
 ----------------

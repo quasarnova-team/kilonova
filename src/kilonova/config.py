@@ -16,8 +16,8 @@ from pathlib import Path
 
 from lxml import etree
 
-from microquasar.design import Design, QuasarClass
-from microquasar.errors import ConfigurationError
+from kilonova.design import Design, QuasarClass
+from kilonova.errors import ConfigurationError
 
 CONFIG_NS = "http://cern.ch/quasar/Configuration"
 _C = f"{{{CONFIG_NS}}}"

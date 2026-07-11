@@ -3,7 +3,7 @@
 Same shape as C++ quasar's Meta module (the conformance oracle): Log levels,
 SourceVariableThreadPool, Quasar/Server info, BuildInformation. The log-level
 variables are functional — writing "DBG" to GeneralLogLevel.logLevel changes
-the Python logging level of the microquasar loggers, exactly as the C++
+the Python logging level of the kilonova loggers, exactly as the C++
 server drives LogIt.
 """
 
@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 from asyncua import ua
 
-import microquasar
+import kilonova
 
 _log = logging.getLogger(__name__)
 
@@ -27,11 +27,11 @@ LOG_LEVELS = {
 
 #: LogIt component -> python logger it controls (same names as the C++ oracle)
 COMPONENTS = {
-    "CalcVars": "microquasar.calculated",
-    "AddressSpace": "microquasar.address_space",
+    "CalcVars": "kilonova.calculated",
+    "AddressSpace": "kilonova.address_space",
 }
 
-_ROOT_LOGGER = "microquasar"
+_ROOT_LOGGER = "kilonova"
 
 
 def _level_name(logger_name: str) -> str:
@@ -49,7 +49,6 @@ async def build_standard_meta_data(
 ) -> None:
     ns = namespace_index
     string_t = ua.NodeId(ua.VariantType.String.value)
-    uint32_t = ua.NodeId(ua.VariantType.UInt32.value)
 
     async def add_object(parent, address: str, name: str):
         return await parent.add_object(ua.NodeId(address, ns), ua.QualifiedName(name, ns))
@@ -100,7 +99,7 @@ async def build_standard_meta_data(
 
     quasar_obj = await add_object(smd, "StandardMetaData.Quasar", "Quasar")
     await add_var(quasar_obj, "StandardMetaData.Quasar.version", "version",
-                  f"microquasar {microquasar.__version__}", string_t)
+                  f"kilonova {kilonova.__version__}", string_t)
 
     server_obj = await add_object(smd, "StandardMetaData.Server", "Server")
     await add_var(server_obj, "StandardMetaData.Server.remainingCertificateValidity",

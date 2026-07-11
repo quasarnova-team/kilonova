@@ -3,8 +3,8 @@
 import pytest
 from asyncua import Client, ua
 
-from microquasar import Design, Server
-from microquasar.errors import ConfigurationError, DesignError
+from kilonova import Design, Server
+from kilonova.errors import ConfigurationError, DesignError
 from tests.conftest import free_port
 
 DESIGN_HEADER = (

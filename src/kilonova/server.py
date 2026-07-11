@@ -1,4 +1,4 @@
-"""The microquasar server: a quasar Design served over OPC UA, pure Python."""
+"""The kilonova server: a quasar Design served over OPC UA, pure Python."""
 
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ import asyncua
 from asyncua import ua
 from asyncua.common.callback import CallbackType
 
-from microquasar import meta, oracle
-from microquasar.address_space import AddressSpaceBuilder
-from microquasar.calculated import CalculatedVariablesEngine
-from microquasar.config import Configuration, load_config
-from microquasar.design import Design, Method
-from microquasar.errors import MicroquasarError
-from microquasar.objects import QuasarObject
+from kilonova import meta, oracle
+from kilonova.address_space import AddressSpaceBuilder
+from kilonova.calculated import CalculatedVariablesEngine
+from kilonova.config import Configuration, load_config
+from kilonova.design import Design, Method
+from kilonova.errors import KilonovaError
+from kilonova.objects import QuasarObject
 
 _log = logging.getLogger(__name__)
 
@@ -293,7 +293,7 @@ class Server:
         self.ua_server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
         namespace_index = await self.ua_server.register_namespace(self._namespace_uri)
         if namespace_index != QUASAR_NAMESPACE_INDEX:
-            raise MicroquasarError(
+            raise KilonovaError(
                 f"expected quasar namespace at index {QUASAR_NAMESPACE_INDEX}, "
                 f"got {namespace_index}"
             )
@@ -339,7 +339,7 @@ class Server:
         self._install_write_hook()
         self._initialized = True
         _log.info(
-            "microquasar: design %r, %d classes, %d objects",
+            "kilonova: design %r, %d classes, %d objects",
             self.design.project_short_name,
             len(self.design.classes),
             len(self.objects),
@@ -375,7 +375,7 @@ class Server:
     async def start(self) -> None:
         await self.init()
         await self.ua_server.start()
-        _log.info("microquasar: serving on %s", self._endpoint)
+        _log.info("kilonova: serving on %s", self._endpoint)
 
     async def stop(self) -> None:
         if self.ua_server is not None:

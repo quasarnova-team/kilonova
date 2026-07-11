@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 
 from asyncua import ua
 
-from microquasar.errors import ConfigurationError
+from kilonova.errors import ConfigurationError
 
 _log = logging.getLogger(__name__)
 

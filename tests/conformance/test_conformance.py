@@ -1,4 +1,4 @@
-"""M6 — the parity gate: microquasar vs quasar's own CI oracle.
+"""M6 — the parity gate: kilonova vs quasar's own CI oracle.
 
 For every case in quasar/.CI/test_cases/manifest.json we serve the case's
 Design + config in-process, dump the address space through a real client
@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from microquasar import Server
-from microquasar.dump import compare_nodesets, dump_address_space, load_nodeset
+from kilonova import Server
+from kilonova.dump import compare_nodesets, dump_address_space, load_nodeset
 from tests.conftest import free_port
 
 QUASAR_ROOT = Path(
-    os.environ.get("MICROQUASAR_QUASAR_ROOT", Path(__file__).resolve().parents[3] / "quasar")
+    os.environ.get("KILONOVA_QUASAR_ROOT", Path(__file__).resolve().parents[3] / "quasar")
 )
 CASES_DIR = QUASAR_ROOT / ".CI" / "test_cases"
 

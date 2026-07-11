@@ -1,4 +1,4 @@
-"""microquasar command line: run a server or dump a running server's address space."""
+"""kilonova command line: run a server or dump a running server's address space."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ import asyncio
 import logging
 import sys
 
-from microquasar.dump import dump_address_space
-from microquasar.server import DEFAULT_ENDPOINT, Server
+from kilonova.dump import dump_address_space
+from kilonova.server import DEFAULT_ENDPOINT, Server
 
 
 async def _run(args: argparse.Namespace) -> int:
     server = Server(args.design, config_path=args.config, endpoint=args.endpoint)
     async with server:
-        print(f"microquasar: serving {args.design} on {args.endpoint} (Ctrl-C to stop)")
+        print(f"kilonova: serving {args.design} on {args.endpoint} (Ctrl-C to stop)")
         try:
             while True:  # noqa: ASYNC110
                 await asyncio.sleep(3600)
@@ -25,12 +25,12 @@ async def _run(args: argparse.Namespace) -> int:
 async def _dump(args: argparse.Namespace) -> int:
     tree = await dump_address_space(args.endpoint)
     tree.write(args.output, xml_declaration=True, encoding="UTF-8", pretty_print=True)
-    print(f"microquasar: address space dumped to {args.output}")
+    print(f"kilonova: address space dumped to {args.output}")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="microquasar", description=__doc__)
+    parser = argparse.ArgumentParser(prog="kilonova", description=__doc__)
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return asyncio.run(handler(args))
     except KeyboardInterrupt:
-        print("\nmicroquasar: stopped")
+        print("\nkilonova: stopped")
         return 0
 
 

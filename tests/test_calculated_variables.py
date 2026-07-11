@@ -68,7 +68,7 @@ async def test_null_input_gives_bad_status(tmp_path):
 async def test_malformed_formula_rejected(tmp_path):
     config = '<A name="a1"><CalculatedVariable name="bad" value="__import__(1)"/></A>'
     server, _ = await boot(tmp_path, DESIGN, config)
-    from microquasar.errors import ConfigurationError
+    from kilonova.errors import ConfigurationError
 
     with pytest.raises(ConfigurationError, match="unsupported construct"):
         await server.init()

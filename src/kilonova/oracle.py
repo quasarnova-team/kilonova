@@ -11,7 +11,7 @@ from collections.abc import Callable
 
 from asyncua import ua
 
-from microquasar.errors import DesignError
+from kilonova.errors import DesignError
 
 
 def _parse_bool(text: str) -> bool:

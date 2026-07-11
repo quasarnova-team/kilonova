@@ -1,6 +1,6 @@
 """Client-side address-space dump and NodeSet2 comparison.
 
-This is microquasar's equivalent of UaSwissArmyKnife's ``uasak_dump``: it
+This is kilonova's equivalent of UaSwissArmyKnife's ``uasak_dump``: it
 connects to a *running* server as an ordinary OPC UA client, walks the
 hierarchy, and emits a NodeSet2-style XML document. Testing through a real
 client connection is the point — the dump sees exactly what WinCC OA or any

@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from microquasar.design import Design
+from kilonova.design import Design
 
 DATA = Path(__file__).parent / "data"
 QUASAR_ROOT = Path(
-    os.environ.get("MICROQUASAR_QUASAR_ROOT", Path(__file__).resolve().parents[2] / "quasar")
+    os.environ.get("KILONOVA_QUASAR_ROOT", Path(__file__).resolve().parents[2] / "quasar")
 )
 
 

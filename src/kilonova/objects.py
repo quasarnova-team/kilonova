@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 from asyncua import ua
 
-from microquasar import oracle
-from microquasar.design import QuasarClass
+from kilonova import oracle
+from kilonova.design import QuasarClass
 
 if typing.TYPE_CHECKING:
     import asyncua

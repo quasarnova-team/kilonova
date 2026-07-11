@@ -3,7 +3,7 @@
 What is this?
 -------------
 
-In C++ quasar you implement `D<Class>` methods. In microquasar there is no generated
+In C++ quasar you implement `D<Class>` methods. In kilonova there is no generated
 skeleton: you register plain async Python functions by dotted address. Everything below is
 the entire user API.
 
@@ -82,6 +82,6 @@ propagate `BadWaitingForInitialData`.
 Logging
 -------
 
-Standard Python `logging`, loggers `microquasar.*`. The StandardMetaData log-level nodes
+Standard Python `logging`, loggers `kilonova.*`. The StandardMetaData log-level nodes
 (`TRC/DBG/INF/WRN/ERR`) set those loggers at runtime, like LogIt on a C++ server; a config
 `<StandardMetaData>` section sets initial levels.

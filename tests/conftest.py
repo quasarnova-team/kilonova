@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from asyncua import Client
 
-from microquasar import Server
+from kilonova import Server
 
 DATA = Path(__file__).parent / "data"
 

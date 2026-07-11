@@ -12,7 +12,7 @@ from pathlib import Path
 
 from lxml import etree
 
-from microquasar.errors import DesignError
+from kilonova.errors import DesignError
 
 DESIGN_NS = "http://cern.ch/quasar/Design"
 _D = f"{{{DESIGN_NS}}}"

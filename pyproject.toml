@@ -1,7 +1,7 @@
 [project]
-name = "microquasar"
+name = "kilonova"
 version = "0.1.0.dev0"
-description = "Pure-Python OPC UA servers from quasar Design files — a quasar in miniature"
+description = "Pure-Python OPC UA servers from quasar Design files — the quasarnova family's no-codegen engine"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "BSD-2-Clause"
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-microquasar = "microquasar.cli:main"
+kilonova = "kilonova.cli:main"
 
 [dependency-groups]
 dev = [

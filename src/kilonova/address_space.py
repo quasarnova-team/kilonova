@@ -13,9 +13,9 @@ import asyncua
 from asyncua import ua
 from asyncua.common.node import Node
 
-from microquasar import oracle
-from microquasar.config import Instance
-from microquasar.design import (
+from kilonova import oracle
+from kilonova.config import Instance
+from kilonova.design import (
     CacheVariable,
     ConfigEntry,
     Design,
@@ -24,8 +24,8 @@ from microquasar.design import (
     QuasarClass,
     SourceVariable,
 )
-from microquasar.errors import ConfigurationError, DesignError
-from microquasar.objects import QuasarObject
+from kilonova.errors import ConfigurationError, DesignError
+from kilonova.objects import QuasarObject
 
 _log = logging.getLogger(__name__)
 

@@ -1,9 +1,11 @@
-# microquasar
+# kilonova
+
+[![CI](https://github.com/quasarnova-team/kilonova/actions/workflows/ci.yml/badge.svg)](https://github.com/quasarnova-team/kilonova/actions/workflows/ci.yml)
 
 What is this?
 -------------
 
-microquasar serves a quasar `Design.xml` + `config.xml` as a live OPC UA server in pure
+kilonova serves a quasar `Design.xml` + `config.xml` as a live OPC UA server in pure
 Python — no code generation, no C++. It produces the same address space as a
 [quasar](https://github.com/quasar-team/quasar)-generated server (same `ns=2` string NodeIds,
 same dotted `parent.child` addressing), so quasar ecosystem tools —
@@ -11,25 +13,27 @@ same dotted `parent.child` addressing), so quasar ecosystem tools —
 [UaoForQuasar](https://github.com/quasar-team/UaoForQuasar) clients, plain OPC UA clients —
 work against it unmodified.
 
-A *microquasar* is a stellar-mass object inside the Milky Way reproducing quasar physics in
-miniature; this project is the successor of
-[MilkyWay](https://github.com/quasar-team/MilkyWay) (Piotr Nikiel's 2021 pure-Python
-prototype), rebuilt from scratch on [asyncua](https://github.com/FreeOpcUa/opcua-asyncio) 2.x.
+A *kilonova* is the luminous flash of a neutron-star merger — a lighter, faster transient
+in the nova family. This kilonova is the pure-Python engine of the
+[quasarnova](https://github.com/quasarnova-team) family: successor of
+[MilkyWay](https://github.com/quasar-team/MilkyWay) (Piotr Nikiel's 2021 prototype, and
+briefly named microquasar), rebuilt from scratch on
+[asyncua](https://github.com/FreeOpcUa/opcua-asyncio) 2.x.
 
 Basic usage mode
 ----------------
 
 1. Install (Python ≥ 3.10): `pip install .` (from this repository, for now)
 1. Run your existing quasar server's design, unchanged:
-   `microquasar run --design Design/Design.xml --config bin/config.xml`
+   `kilonova run --design Design/Design.xml --config bin/config.xml`
 1. Point any OPC UA client at `opc.tcp://host:4841` — the address space is quasar's.
 1. Dump a running server's address space (uasak_dump-style NodeSet2):
-   `microquasar dump --endpoint opc.tcp://127.0.0.1:4841 --output dump.xml`
+   `kilonova dump --endpoint opc.tcp://127.0.0.1:4841 --output dump.xml`
 
 Device logic is plain Python (see [doc/DeviceLogic.md](doc/DeviceLogic.md)):
 
 ```python
-from microquasar import Server
+from kilonova import Server
 
 server = Server("Design.xml", config_path="config.xml")
 
@@ -75,7 +79,7 @@ Documentation
 Credits
 -------
 
-- Paris Moschovakos (paris@moschovakos.com) — microquasar
+- Paris Moschovakos (paris@moschovakos.com) — kilonova
 - Piotr Nikiel — quasar concept and architecture; MilkyWay, the predecessor
 
 License: BSD-2-Clause.

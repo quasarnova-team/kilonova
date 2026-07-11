@@ -13,10 +13,10 @@ async def test_log_level_variable_drives_python_logging(sca_client):
     assert await log_level.read_value() in ("TRC", "DBG", "INF", "WRN", "ERR")
 
     await log_level.write_value(ua.Variant("DBG", ua.VariantType.String))
-    assert logging.getLogger("microquasar").getEffectiveLevel() == logging.DEBUG
+    assert logging.getLogger("kilonova").getEffectiveLevel() == logging.DEBUG
 
     await log_level.write_value(ua.Variant("WRN", ua.VariantType.String))
-    assert logging.getLogger("microquasar").getEffectiveLevel() == logging.WARNING
+    assert logging.getLogger("kilonova").getEffectiveLevel() == logging.WARNING
 
 
 async def test_meta_subtree_shape(sca_client):
@@ -35,16 +35,16 @@ async def test_component_log_level(sca_client):
         ua.NodeId("StandardMetaData.Log.ComponentLogLevels.CalcVars.logLevel", 2)
     )
     await calc_vars.write_value(ua.Variant("TRC", ua.VariantType.String))
-    assert logging.getLogger("microquasar.calculated").getEffectiveLevel() == 5
+    assert logging.getLogger("kilonova.calculated").getEffectiveLevel() == 5
 
 
-async def test_version_mentions_microquasar(sca_client):
+async def test_version_mentions_kilonova(sca_client):
     version = sca_client.get_node(ua.NodeId("StandardMetaData.Quasar.version", 2))
-    assert "microquasar" in await version.read_value()
+    assert "kilonova" in await version.read_value()
 
 
 @pytest.fixture(autouse=True)
 def _restore_log_levels():
     yield
-    for name in ("microquasar", "microquasar.calculated", "microquasar.address_space"):
+    for name in ("kilonova", "kilonova.calculated", "kilonova.address_space"):
         logging.getLogger(name).setLevel(logging.NOTSET)

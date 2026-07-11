@@ -1,4 +1,4 @@
-# microquasar — implementation plan
+# kilonova — implementation plan
 
 One feature at a time; every step lands with tests, and every user-visible behaviour is tested
 **from the UX**: a real asyncua `Client` connects to the running server and reads the address
@@ -19,7 +19,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 - `StandardMetaData` is compared in full for the `default_design` case (its reference is
   the meta oracle); for the other cases it is ignored exactly as quasar's own CI does —
   their references carry stale, mutually contradictory meta snapshots (minThreads i=7 vs
-  i=12). microquasar's meta is live: log-level variables drive the Python loggers, and
+  i=12). kilonova's meta is live: log-level variables drive the Python loggers, and
   `<StandardMetaData>` config sections set initial levels.
 
 ## Milestones
@@ -38,8 +38,8 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M9 | CalculatedVariables (safe formula eval) | Client reads computed value | done |
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | done |
 | M11 | Config restrictions + cardinality validation | invalid config rejected like C++ Configurator | done |
-| M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against microquasar | generated client works unmodified | done (local legs) |
-| M13 | parity-night third backend column (production servers) | probe parity vs live C++ backends | done — ATCA/CAEN full structural parity; CanOpen surfaced 2 cross-backend quirks (see .parity-night/cells/*-microquasar/deps-note.txt) |
+| M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against kilonova | generated client works unmodified | done (local legs) |
+| M13 | parity-night third backend column (production servers) | probe parity vs live C++ backends | done — ATCA/CAEN full structural parity; CanOpen surfaced 2 cross-backend quirks (see .parity-night/cells/*-kilonova/deps-note.txt) |
 
 ## Current parity table (M6 gate, StandardMetaData ignored)
 
@@ -81,12 +81,12 @@ dependent recomputes *inside* the write that changed its input, so the next read
 Any null/bad input yields BadWaitingForInitialData. **All 12 quasar CI oracle cases now pass.**
 
 M12 (ecosystem smoke, local legs — 2026-07-11): Cacophony generates its WinCC OA CTRL
-artifacts cleanly from microquasar-served designs, and `tools/cacophony_crosscheck.py`
+artifacts cleanly from kilonova-served designs, and `tools/cacophony_crosscheck.py`
 verifies every periphery address the generated configParser.ctl would assign resolves on a
-live microquasar server: 8/8 on the SCA demo, **600/600 on the production ATCA design**.
+live kilonova server: 8/8 on the SCA demo, **600/600 on the production ATCA design**.
 UaoForQuasar client classes generate cleanly for production classes (Manager/Board/FanTray)
 and their generated NodeId construction (`parentId + ".var"`, parent namespace) is exactly
-microquasar's addressing. Deferred: compiling/running the generated C++ client (needs UASDK
+kilonova's addressing. Deferred: compiling/running the generated C++ client (needs UASDK
 — a docker parity-image job, natural follow-up in the parity-night campaign).
 
 ## Design decisions (2026 rewrite, vs the 2021 MilkyWay prototype)

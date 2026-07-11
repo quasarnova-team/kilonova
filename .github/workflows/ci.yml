@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --dev
+      - run: uv run ruff check src tests examples tools
+      - run: uv run ruff format --check src tests examples tools || true
+
+  test:
+    name: tests + quasar conformance (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      # kilonova's oracle is quasar's own CI test-case suite: the conformance job
+      # serves every case and diffs the client-visible address space against the
+      # reference nodesets - the same gate quasar's C++ CI uses for its backends.
+      - name: Check out quasar (conformance oracle)
+        uses: actions/checkout@v4
+        with:
+          repository: quasar-team/quasar
+          path: quasar
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --dev
+      - name: Unit + UX tests
+        run: uv run pytest tests -q --ignore=tests/conformance
+      - name: Conformance vs quasar reference nodesets
+        env:
+          KILONOVA_QUASAR_ROOT: ${{ github.workspace }}/quasar
+        run: uv run pytest tests/conformance -v

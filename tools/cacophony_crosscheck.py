@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """M12 ecosystem smoke: verify Cacophony's generated WinCC OA addresses resolve
-on a live microquasar server.
+on a live kilonova server.
 
 Cacophony's generated configParser.ctl assigns one OPC UA periphery address per
 variable: ``ns=2;s=`` + the DPE path with ``/`` replaced by ``.``. This tool
@@ -26,8 +26,8 @@ from pathlib import Path
 from asyncua import Client, ua
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from microquasar import Design, Server  # noqa: E402
-from microquasar.config import Instance, load_config  # noqa: E402
+from kilonova import Design, Server  # noqa: E402
+from kilonova.config import Instance, load_config  # noqa: E402
 
 _CONFIGURE_FN = re.compile(r"bool\s+configureFromName(\w+)\s*\(")
 _DPE_LINE = re.compile(r'dpe\s*=\s*fullName\+"\.(\w+)"')
@@ -82,19 +82,18 @@ async def main() -> int:
     server = Server(args.design, config_path=args.config, endpoint=url)
 
     failures = []
-    async with server:
-        async with Client(url=url) as client:
-            for address in addresses:
-                node = client.get_node(ua.NodeId(address, 2))
-                try:
-                    await node.read_data_value(raise_on_bad_status=False)
-                except ua.UaStatusCodeError as exc:
-                    failures.append(f"ns=2;s={address}: {exc}")
+    async with server, Client(url=url) as client:
+        for address in addresses:
+            node = client.get_node(ua.NodeId(address, 2))
+            try:
+                await node.read_data_value(raise_on_bad_status=False)
+            except ua.UaStatusCodeError as exc:
+                failures.append(f"ns=2;s={address}: {exc}")
 
     for failure in failures:
         print("FAIL", failure)
     verdict = "all addresses resolve" if not failures else f"{len(failures)} FAILURES"
-    print(f"microquasar vs Cacophony: {verdict}")
+    print(f"kilonova vs Cacophony: {verdict}")
     return 1 if failures else 0
 
 

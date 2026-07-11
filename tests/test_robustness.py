@@ -232,3 +232,39 @@ async def test_server_config_endpoint_and_policy(tmp_path):
                      server_config_path=tmp_path / "ServerConfig.xml")
     async with server, Client(url=f"opc.tcp://127.0.0.1:{port}/") as client:
         assert await client.get_node(ua.NodeId("a1.x", 2)).read_value() == 5
+
+
+async def test_user_password_authentication(tmp_path):
+    """EnableAnonymous=false + EnableUserPw=true: anonymous rejected, valid user works."""
+    from kilonova import Server as KServer
+
+    port = free_port()
+    (tmp_path / "ServerConfig.xml").write_text(f"""<OpcServerConfig><UaServerConfig>
+      <UaEndpoint><Url>opc.tcp://[NodeName]:{port}</Url></UaEndpoint>
+      <UserIdentityTokens>
+        <EnableAnonymous>false</EnableAnonymous>
+        <EnableUserPw>true</EnableUserPw>
+      </UserIdentityTokens>
+    </UaServerConfig></OpcServerConfig>""")
+    design, config = write_pair(tmp_path, SIMPLE_CLASS, '<A name="a1" x="5"/>')
+    server = KServer(design, config_path=config,
+                     server_config_path=tmp_path / "ServerConfig.xml",
+                     users={"operator": "secret"})
+    url = f"opc.tcp://127.0.0.1:{port}/"
+    async with server:
+        with pytest.raises(Exception):
+            async with Client(url=url):
+                pass
+
+        good = Client(url=url)
+        good.set_user("operator")
+        good.set_password("secret")
+        async with good:
+            assert await good.get_node(ua.NodeId("a1.x", 2)).read_value() == 5
+
+        bad = Client(url=url)
+        bad.set_user("operator")
+        bad.set_password("wrong")
+        with pytest.raises(Exception):
+            async with bad:
+                pass

@@ -21,6 +21,7 @@ from kilonova.design import Design, Method
 from kilonova.errors import KilonovaError
 from kilonova.objects import QuasarObject
 from kilonova.server_config import load_server_config
+from kilonova.users import QuasarUserManager
 
 _log = logging.getLogger(__name__)
 
@@ -46,11 +47,13 @@ class Server:
         endpoint: str = DEFAULT_ENDPOINT,
         namespace_uri: str = "OPCUASERVER",  # the URI C++ quasar publishes at ns=2
         server_config_path: str | Path | None = None,
+        users: dict[str, str] | None = None,
     ) -> None:
         self._design_path = Path(design_path)
         self._config_path = Path(config_path) if config_path else None
         self._endpoint = endpoint
         self._server_config_path = Path(server_config_path) if server_config_path else None
+        self._users = dict(users) if users else None
         self._namespace_uri = namespace_uri
         self.design: Design | None = None
         self.ua_server: asyncua.Server | None = None
@@ -80,7 +83,11 @@ class Server:
         if domain == "of_parent_of_containing_object":
             parent = owner.rsplit(".", 1)[0] if "." in owner else owner
             return ("obj", parent)
-        raise KilonovaError(f"mutex domain {domain!r} is not supported yet")
+        if domain == "handpicked":
+            # C++ semantics: the developer supplies the mutex; the framework
+            # applies none. Hold your own lock inside the handler.
+            return None
+        raise KilonovaError(f"unknown mutex domain {domain!r}")
 
     def _domain_lock(self, domain: str, address: str, operation: str):
         key = self._mutex_domain(domain, address, operation)
@@ -329,7 +336,13 @@ class Server:
             if server_config.endpoint_url and self._endpoint == DEFAULT_ENDPOINT:
                 self._endpoint = server_config.endpoint_url
 
-        self.ua_server = asyncua.Server()
+        allow_anonymous = server_config.enable_anonymous if server_config else True
+        allow_user_pw = server_config.enable_user_pw if server_config else bool(self._users)
+        user_manager = QuasarUserManager(
+            allow_anonymous=allow_anonymous,
+            users=self._users if allow_user_pw else None,
+        )
+        self.ua_server = asyncua.Server(user_manager=user_manager)
         await self.ua_server.init()
         self._allow_writes_to_base_datatype_nodes()
         self.ua_server.set_endpoint(self._endpoint)

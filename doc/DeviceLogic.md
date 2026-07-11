@@ -93,7 +93,8 @@ The Design's mutex declarations are honoured with asyncio locks: source-variable
 `addressSpaceRead/WriteUseMutex` and method `addressSpaceCallUseMutex` serialize device
 access per declared domain (`of_this_operation`, `of_this_variable` / `of_this_method`,
 `of_containing_object`, `of_parent_of_containing_object`); domain `no` runs concurrently,
-exactly as on the C++ server. `handpicked` is not supported yet.
+exactly as on the C++ server. `handpicked` means the framework applies no lock — you hold your own inside the
+handler, exactly as on the C++ server where the developer supplies the mutex.
 
 Method `executionSynchronicity` is parsed and both values behave like C++'s
 *asynchronous* mode by construction: handlers are awaited coroutines, so a slow method

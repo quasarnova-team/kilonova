@@ -252,7 +252,7 @@ async def test_user_password_authentication(tmp_path):
                      users={"operator": "secret"})
     url = f"opc.tcp://127.0.0.1:{port}/"
     async with server:
-        with pytest.raises(Exception):
+        with pytest.raises(ua.UaError):
             async with Client(url=url):
                 pass
 
@@ -265,6 +265,6 @@ async def test_user_password_authentication(tmp_path):
         bad = Client(url=url)
         bad.set_user("operator")
         bad.set_password("wrong")
-        with pytest.raises(Exception):
+        with pytest.raises(ua.UaError):
             async with bad:
                 pass

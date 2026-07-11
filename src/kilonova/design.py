@@ -96,6 +96,8 @@ class Method:
     name: str
     arguments: tuple[MethodArgument, ...] = ()
     return_values: tuple[MethodArgument, ...] = ()
+    execution_synchronicity: str = "synchronous"  # both map to awaited async dispatch
+    call_use_mutex: str = "no"  # no | of_this_method | of_containing_object
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,8 @@ class SourceVariable:
     data_type: str
     address_space_read: str = "forbidden"  # forbidden | synchronous | asynchronous
     address_space_write: str = "forbidden"
+    read_use_mutex: str = "no"  # no | of_this_operation | of_this_variable | of_containing_object | of_parent_of_containing_object | handpicked
+    write_use_mutex: str = "no"
     is_array: bool = False
 
     @property
@@ -250,6 +254,8 @@ def _parse_class(element: etree._Element) -> QuasarClass:
                     data_type=_required(child, "dataType"),
                     address_space_read=child.get("addressSpaceRead", "forbidden"),
                     address_space_write=child.get("addressSpaceWrite", "forbidden"),
+                    read_use_mutex=child.get("addressSpaceReadUseMutex", "no"),
+                    write_use_mutex=child.get("addressSpaceWriteUseMutex", "no"),
                     is_array=any(
                         isinstance(g.tag, str) and _local(g.tag) == "array" for g in child
                     ),
@@ -359,6 +365,8 @@ def _parse_method(element: etree._Element) -> Method:
         name=_required(element, "name"),
         arguments=tuple(arguments),
         return_values=tuple(return_values),
+        execution_synchronicity=element.get("executionSynchronicity", "synchronous"),
+        call_use_mutex=element.get("addressSpaceCallUseMutex", "no"),
     )
 
 

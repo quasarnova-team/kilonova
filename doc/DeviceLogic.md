@@ -85,3 +85,17 @@ Logging
 Standard Python `logging`, loggers `kilonova.*`. The StandardMetaData log-level nodes
 (`TRC/DBG/INF/WRN/ERR`) set those loggers at runtime, like LogIt on a C++ server; a config
 `<StandardMetaData>` section sets initial levels.
+
+Synchronization domains
+-----------------------
+
+The Design's mutex declarations are honoured with asyncio locks: source-variable
+`addressSpaceRead/WriteUseMutex` and method `addressSpaceCallUseMutex` serialize device
+access per declared domain (`of_this_operation`, `of_this_variable` / `of_this_method`,
+`of_containing_object`, `of_parent_of_containing_object`); domain `no` runs concurrently,
+exactly as on the C++ server. `handpicked` is not supported yet.
+
+Method `executionSynchronicity` is parsed and both values behave like C++'s
+*asynchronous* mode by construction: handlers are awaited coroutines, so a slow method
+never blocks the server loop, and the client's Call completes when the handler finishes
+(C++'s `finishCall`).

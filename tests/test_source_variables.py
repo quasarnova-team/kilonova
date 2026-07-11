@@ -1,7 +1,9 @@
 """M8 — source variables and delegated writes, exercised by a real client."""
 
+import asyncio
+
 import pytest
-from asyncua import ua
+from asyncua import Client, ua
 
 
 def node(client, path: str):
@@ -122,3 +124,58 @@ async def test_server_side_setters_bypass_delegation(sca_server):
     await server.objects["sca1"].setTarget(1.0)
     assert calls["n"] == 0
     assert await server.objects["sca1"].get_cv("target") == pytest.approx(1.0)
+
+
+async def test_mutex_domain_of_containing_object(tmp_path):
+    """Design-declared synchronization: of_containing_object serializes device
+    access across variables of one object; domain 'no' runs concurrently."""
+    from tests.test_robustness import boot
+
+    design_body = (
+        '<d:class name="Dev"><d:devicelogic/>'
+        '<d:sourcevariable name="a" dataType="OpcUa_Double" addressSpaceRead="synchronous"'
+        ' addressSpaceWrite="forbidden" addressSpaceReadUseMutex="of_containing_object"'
+        ' addressSpaceWriteUseMutex="no"/>'
+        '<d:sourcevariable name="b" dataType="OpcUa_Double" addressSpaceRead="synchronous"'
+        ' addressSpaceWrite="forbidden" addressSpaceReadUseMutex="of_containing_object"'
+        ' addressSpaceWriteUseMutex="no"/>'
+        '<d:sourcevariable name="free1" dataType="OpcUa_Double" addressSpaceRead="synchronous"'
+        ' addressSpaceWrite="forbidden" addressSpaceReadUseMutex="no"'
+        ' addressSpaceWriteUseMutex="no"/>'
+        '<d:sourcevariable name="free2" dataType="OpcUa_Double" addressSpaceRead="synchronous"'
+        ' addressSpaceWrite="forbidden" addressSpaceReadUseMutex="no"'
+        ' addressSpaceWriteUseMutex="no"/>'
+        "</d:class>"
+        '<d:root><d:hasobjects instantiateUsing="configuration" class="Dev"/></d:root>'
+    )
+    server, url = await boot(tmp_path, design_body, '<Dev name="d1"/>')
+    state = {"active": 0, "max_locked": 0, "max_free": 0}
+
+    def make_handler(bucket):
+        async def read(obj):
+            state["active"] += 1
+            state[bucket] = max(state[bucket], state["active"])
+            await asyncio.sleep(0.15)
+            state["active"] -= 1
+            return 1.0
+        return read
+
+    server.read("d1.a")(make_handler("max_locked"))
+    server.read("d1.b")(make_handler("max_locked"))
+    server.read("d1.free1")(make_handler("max_free"))
+    server.read("d1.free2")(make_handler("max_free"))
+
+    # two sessions: one session's requests are processed in order by asyncua,
+    # so cross-variable concurrency is only observable across connections
+    async with server, Client(url=url) as c1, Client(url=url) as c2:
+        await asyncio.gather(
+            c1.get_node(ua.NodeId("d1.a", 2)).read_value(),
+            c2.get_node(ua.NodeId("d1.b", 2)).read_value(),
+        )
+        assert state["max_locked"] == 1  # serialized by the object's domain
+
+        await asyncio.gather(
+            c1.get_node(ua.NodeId("d1.free1", 2)).read_value(),
+            c2.get_node(ua.NodeId("d1.free2", 2)).read_value(),
+        )
+        assert state["max_free"] == 2  # domain "no": concurrent, like C++

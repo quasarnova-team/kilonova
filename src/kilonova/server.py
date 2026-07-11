@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import logging
 from datetime import datetime, timezone
@@ -56,8 +57,36 @@ class Server:
         self._write_handlers: dict[str, object] = {}
         self._source_specs: dict[str, object] = {}
         self._delegated_addresses: set[str] = set()
-        self._source_locks: dict[str, asyncio.Lock] = {}
+        self._domain_locks: dict[tuple, asyncio.Lock] = {}
         self._initialized = False
+
+    def _mutex_domain(self, domain: str, address: str, operation: str) -> tuple | None:
+        """Map a Design mutex domain to a lock key (C++ quasar's 6 domains).
+
+        ``of_this_method`` (methods) shares the semantics of of_this_variable.
+        """
+        owner = address.rsplit(".", 1)[0]
+        if domain in ("no", None):
+            return None
+        if domain == "of_this_operation":
+            return ("op", address, operation)
+        if domain in ("of_this_variable", "of_this_method"):
+            return ("var", address)
+        if domain == "of_containing_object":
+            return ("obj", owner)
+        if domain == "of_parent_of_containing_object":
+            parent = owner.rsplit(".", 1)[0] if "." in owner else owner
+            return ("obj", parent)
+        raise KilonovaError(f"mutex domain {domain!r} is not supported yet")
+
+    def _domain_lock(self, domain: str, address: str, operation: str):
+        key = self._mutex_domain(domain, address, operation)
+        if key is None:
+            return contextlib.nullcontext()
+        lock = self._domain_locks.get(key)
+        if lock is None:
+            lock = self._domain_locks[key] = asyncio.Lock()
+        return lock
 
     def method(self, address: str):
         """Register an async handler for a method node, by dotted address.
@@ -147,9 +176,10 @@ class Server:
             await self._refresh_source_variable(address, handler)
 
     async def _refresh_source_variable(self, address: str, handler) -> None:
-        lock = self._source_locks.setdefault(address, asyncio.Lock())
-        async with lock:
-            spec = self._source_specs[address]
+        spec = self._source_specs[address]
+        # serialization is exactly what the Design declares (C++ mutex domains);
+        # domain "no" runs concurrently, as it does on the C++ server
+        async with self._domain_lock(spec.read_use_mutex, address, "read"):
             owner = self.objects[address.rsplit(".", 1)[0]]
             now = datetime.now(timezone.utc)
             try:
@@ -224,10 +254,13 @@ class Server:
                 owner = self.objects[address.rsplit(".", 1)[0]]
                 raw = write_value.Value
                 value = raw.Value.Value if raw is not None and raw.Value is not None else None
+                spec = self._source_specs.get(address)
+                write_domain = spec.write_use_mutex if spec is not None else "no"
                 try:
-                    outcome = handler(owner, value)
-                    if inspect.isawaitable(outcome):
-                        await outcome
+                    async with self._domain_lock(write_domain, address, "write"):
+                        outcome = handler(owner, value)
+                        if inspect.isawaitable(outcome):
+                            await outcome
                 except ua.UaStatusCodeError as exc:
                     results.append(ua.StatusCode(exc.code))
                     continue
@@ -255,9 +288,10 @@ class Server:
             if len(variants) > len(method.arguments):
                 return ua.StatusCode(ua.StatusCodes.BadTooManyArguments)
             arguments = [variant.Value for variant in variants]
-            result = handler(self.objects[parent_address], *arguments)
-            if inspect.isawaitable(result):
-                result = await result
+            async with self._domain_lock(method.call_use_mutex, method_address, "call"):
+                result = handler(self.objects[parent_address], *arguments)
+                if inspect.isawaitable(result):
+                    result = await result
             returns = method.return_values
             if not returns:
                 return []

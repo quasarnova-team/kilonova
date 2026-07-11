@@ -3,7 +3,11 @@
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xsi:schemaLocation="http://cern.ch/quasar/Configuration Configuration.xsd">
   <SCA name="sca1" id="theSCA" temperature="25.5">
-    <channels>1 2 3</channels>
+    <channels>
+      <value>1</value>
+      <value>2</value>
+      <value>3</value>
+    </channels>
     <Chip name="chip0"/>
   </SCA>
 </configuration>

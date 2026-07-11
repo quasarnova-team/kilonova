@@ -30,7 +30,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M5 | MilkyWay parity: `set_cv`, generated `setXxx` setters, live demo | Client subscribes, sees ticking value | done |
 | M6 | Conformance runner + dumper (uasak_dump equivalent) | parity table over quasar CI cases | done |
 | M7 | Methods: nodes + real async handlers (decorator API) | Client calls method, gets result | done |
-| M8 | Source variables: async read/write callbacks | Client read triggers user coroutine | pending |
+| M8 | Source variables + delegated-write callbacks | Client read/write triggers user coroutine | pending |
 | M9 | CalculatedVariables (safe formula eval) | Client reads computed value | pending |
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | pending |
 | M11 | Config XSD validation + restrictions | invalid config rejected like C++ Configurator | pending |
@@ -71,3 +71,26 @@ M6; M7 added callable handlers via the `@server.method("sca1.scale")` decorator 
   connection — testing "from the UX" is the default, not an afterthought.
 - The 2021 bugs are regression-tested: initialStatus actually applied, numeric initialValue
   works, unsupported config elements raise instead of NameError-ing.
+
+## Parity rules learned the hard way (2026-07-11 adversarial review)
+
+A 38-agent review panel with live-repro verification found parity bugs the M6 gate is
+structurally blind to (the comparison is one-directional and value-less). All fixed and
+regression-tested in `tests/test_robustness.py`:
+
+- **DataType follows nullPolicy**: C++ quasar sets the concrete DataType only for
+  `nullForbidden` variables; `nullAllowed` ones serve BaseDataType (i=24) so null writes
+  stay legal. (asyncua's type heuristic refuses writes to BaseDataType nodes — instance-local
+  override in `Server._allow_writes_to_base_datatype_nodes`, worth upstreaming.)
+- **Arrays are `<value>` elements** in config.xml (quasar's generated Configuration.xsd);
+  text-content arrays are rejected loudly, as the C++ Configurator would.
+- **`defaultConfigInitializerValue`** is honoured when the config omits a value.
+- **singleVariableNode instances** take configuration values.
+- **Array config entries** are NOT published as properties (C++ skips them).
+- Robustness: unknown config attributes/children and out-of-range integers are rejected at
+  load; `set_cv` raises on refused writes and range violations; method calls validate
+  argument counts (BadArgumentsMissing/BadTooManyArguments).
+
+Known gate limitations (roadmap): the comparer checks only NodeId+attributes (like quasar's
+own CI) — values and references are dumped but not compared; strengthening it beyond the C++
+gate is future work alongside M11.

@@ -22,6 +22,16 @@ def _local(tag: str) -> str:
     return tag.replace(_D, "")
 
 
+def _required(element: etree._Element, attribute: str) -> str:
+    value = element.get(attribute)
+    if not value:
+        raise DesignError(
+            f"<{_local(element.tag)}> (line {element.sourceline}) is missing "
+            f"required attribute {attribute!r}"
+        )
+    return value
+
+
 @dataclass(frozen=True)
 class CacheVariable:
     """A d:cachevariable — an OPC UA variable backed by an in-server cache."""
@@ -33,6 +43,7 @@ class CacheVariable:
     null_policy: str | None = None  # nullAllowed | nullForbidden
     initial_value: str | None = None
     initial_status: str | None = None
+    default_config_initializer_value: str | None = None
     is_array: bool = False
 
     @property
@@ -42,7 +53,8 @@ class CacheVariable:
 
 @dataclass(frozen=True)
 class ConfigEntry:
-    """A d:configentry — configuration-only data, not present in the address space."""
+    """A d:configentry — configured data; scalars surface as read-only properties
+    in the address space (array entries stay config-only, matching C++ quasar)."""
 
     name: str
     data_type: str
@@ -146,6 +158,8 @@ class Design:
             tag = _local(element.tag)
             if tag == "class":
                 klass = _parse_class(element)
+                if klass.name in classes:
+                    raise DesignError(f"duplicate class {klass.name!r} in the Design")
                 classes[klass.name] = klass
             elif tag == "root":
                 root_has_objects = tuple(
@@ -181,8 +195,8 @@ def _parse_class(element: etree._Element) -> QuasarClass:
         elif tag == "configentry":
             config_entries.append(
                 ConfigEntry(
-                    name=child.get("name"),
-                    data_type=child.get("dataType"),
+                    name=_required(child, "name"),
+                    data_type=_required(child, "dataType"),
                     is_key=child.get("isKey") == "true",
                     is_array=any(_local(g.tag) == "array" for g in child
                                  if isinstance(g.tag, str)),
@@ -202,7 +216,7 @@ def _parse_class(element: etree._Element) -> QuasarClass:
             )
 
     return QuasarClass(
-        name=element.get("name"),
+        name=_required(element, "name"),
         cache_variables=tuple(cache_variables),
         config_entries=tuple(config_entries),
         methods=tuple(methods),
@@ -220,13 +234,14 @@ def _parse_cache_variable(element: etree._Element) -> CacheVariable:
         isinstance(child.tag, str) and _local(child.tag) == "array" for child in element
     )
     return CacheVariable(
-        name=element.get("name"),
-        data_type=element.get("dataType"),
+        name=_required(element, "name"),
+        data_type=_required(element, "dataType"),
         address_space_write=element.get("addressSpaceWrite", "forbidden"),
-        initialize_with=element.get("initializeWith"),
+        initialize_with=_required(element, "initializeWith"),
         null_policy=element.get("nullPolicy"),
         initial_value=element.get("initialValue"),
         initial_status=element.get("initialStatus"),
+        default_config_initializer_value=element.get("defaultConfigInitializerValue"),
         is_array=is_array,
     )
 
@@ -241,15 +256,15 @@ def _parse_method(element: etree._Element) -> Method:
         if tag not in ("argument", "returnvalue"):
             continue
         argument = MethodArgument(
-            name=child.get("name"),
-            data_type=child.get("dataType"),
+            name=_required(child, "name"),
+            data_type=_required(child, "dataType"),
             is_array=any(
                 isinstance(g.tag, str) and _local(g.tag) == "array" for g in child
             ),
         )
         (arguments if tag == "argument" else return_values).append(argument)
     return Method(
-        name=element.get("name"),
+        name=_required(element, "name"),
         arguments=tuple(arguments),
         return_values=tuple(return_values),
     )
@@ -260,12 +275,12 @@ def _parse_has_objects(element: etree._Element) -> HasObjects:
     design_names: tuple[str, ...] = ()
     if instantiate_using == "design":
         design_names = tuple(
-            child.get("name")
+            _required(child, "name")
             for child in element
             if isinstance(child.tag, str) and _local(child.tag) == "object"
         )
     return HasObjects(
-        class_name=element.get("class"),
+        class_name=_required(element, "class"),
         instantiate_using=instantiate_using,
         design_instance_names=design_names,
     )
@@ -282,6 +297,12 @@ def _validate(design: Design) -> None:
             raise DesignError(
                 f"class {klass.name}: singleVariableNode requires exactly one cache variable"
             )
+        for cv in klass.cache_variables:
+            if cv.is_array and cv.initial_value is not None:
+                raise DesignError(
+                    f"class {klass.name}, cache variable {cv.name}: initialValue is not "
+                    "supported on array cache variables"
+                )
     for rel in design.root_has_objects:
         if rel.class_name not in design.classes:
             raise DesignError(f"root: hasobjects refers to unknown class {rel.class_name}")

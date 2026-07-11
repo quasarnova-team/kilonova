@@ -8,12 +8,19 @@ def node(client, path: str):
     return client.get_node(ua.NodeId(path, 2))
 
 
-async def test_datatype_comes_from_the_design(sca_client):
-    online = node(sca_client, "sca1.online")
-    assert await online.read_data_type() == ua.NodeId(ua.VariantType.UInt32.value)
+async def test_datatype_follows_null_policy(sca_client):
+    """C++ quasar rule: concrete DataType only for nullForbidden variables;
+    nullAllowed ones keep BaseDataType so null stays writable."""
+    channels = node(sca_client, "sca1.channels")  # nullForbidden -> concrete type
+    assert await channels.read_data_type() == ua.NodeId(ua.VariantType.UInt16.value)
 
-    id_var = node(sca_client, "sca1.id")
-    assert await id_var.read_data_type() == ua.NodeId(ua.VariantType.String.value)
+    bar = node(sca_client, "sca1.chip0.bar")  # nullForbidden -> concrete type
+    assert await bar.read_data_type() == ua.NodeId(ua.VariantType.Double.value)
+
+    for null_allowed in ("sca1.online", "sca1.id", "sca1.temperature"):
+        assert await node(sca_client, null_allowed).read_data_type() == ua.NodeId(
+            ua.ObjectIds.BaseDataType
+        )
 
 
 async def test_value_rank_scalar_vs_array(sca_client):

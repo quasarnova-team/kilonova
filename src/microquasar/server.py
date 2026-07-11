@@ -80,6 +80,10 @@ class Server:
             if handler is None:
                 # asyncua contract: return (not raise) a StatusCode for a clean failure
                 return ua.StatusCode(ua.StatusCodes.BadNotImplemented)
+            if len(variants) < len(method.arguments):
+                return ua.StatusCode(ua.StatusCodes.BadArgumentsMissing)
+            if len(variants) > len(method.arguments):
+                return ua.StatusCode(ua.StatusCodes.BadTooManyArguments)
             arguments = [variant.Value for variant in variants]
             result = handler(self.objects[parent_address], *arguments)
             if inspect.isawaitable(result):
@@ -87,7 +91,12 @@ class Server:
             returns = method.return_values
             if not returns:
                 return []
-            values = result if isinstance(result, tuple) else (result,)
+            # a single declared return value is never unpacked, so an array-valued
+            # return may be given as a tuple/list without being misread as N values
+            if len(returns) == 1:
+                values = (result,)
+            else:
+                values = result if isinstance(result, tuple) else (result,)
             if len(values) != len(returns):
                 _log.error(
                     "method %s: handler returned %d value(s), design declares %d",
@@ -109,6 +118,7 @@ class Server:
 
         self.ua_server = asyncua.Server()
         await self.ua_server.init()
+        self._allow_writes_to_base_datatype_nodes()
         self.ua_server.set_endpoint(self._endpoint)
         self.ua_server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
         namespace_index = await self.ua_server.register_namespace(self._namespace_uri)
@@ -140,6 +150,33 @@ class Server:
             len(self.design.classes),
             len(self.objects),
         )
+
+    def _allow_writes_to_base_datatype_nodes(self) -> None:
+        """Make BaseDataType variables accept any concrete value type.
+
+        quasar's nullAllowed cache variables carry DataType=BaseDataType, which per
+        OPC UA Part 3 is a supertype of every data type — any value (and null) is a
+        legal write. asyncua's heuristic (`_is_expected_variant_type`, marked FIXME
+        upstream) instead demands variant type == 24 and refuses such writes, so we
+        override it for this server instance only, falling back to the original
+        check for every concretely-typed node.
+        """
+        aspace = self.ua_server.iserver.aspace
+        original = aspace._is_expected_variant_type
+
+        def base_datatype_tolerant(value, attval, node) -> bool:
+            data_type_attr = node.attributes.get(ua.AttributeIds.DataType)
+            if data_type_attr is not None and data_type_attr.value is not None:
+                data_type = data_type_attr.value.Value
+                if (
+                    data_type is not None
+                    and isinstance(data_type.Value, ua.NodeId)
+                    and data_type.Value == ua.NodeId(ua.ObjectIds.BaseDataType)
+                ):
+                    return True
+            return original(value, attval, node)
+
+        aspace._is_expected_variant_type = base_datatype_tolerant
 
     async def start(self) -> None:
         await self.init()

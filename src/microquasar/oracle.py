@@ -22,17 +22,41 @@ def _parse_bool(text: str) -> bool:
     raise ValueError(f"not a quasar boolean: {text!r}")
 
 
+#: value ranges of the OPC UA integer types, enforced at parse and set_cv time
+_INT_RANGES: dict[ua.VariantType, tuple[int, int]] = {
+    ua.VariantType.SByte: (-(2**7), 2**7 - 1),
+    ua.VariantType.Byte: (0, 2**8 - 1),
+    ua.VariantType.Int16: (-(2**15), 2**15 - 1),
+    ua.VariantType.UInt16: (0, 2**16 - 1),
+    ua.VariantType.Int32: (-(2**31), 2**31 - 1),
+    ua.VariantType.UInt32: (0, 2**32 - 1),
+    ua.VariantType.Int64: (-(2**63), 2**63 - 1),
+    ua.VariantType.UInt64: (0, 2**64 - 1),
+}
+
+
+def _check_int_range(value: int, vt: ua.VariantType) -> int:
+    low, high = _INT_RANGES[vt]
+    if not low <= value <= high:
+        raise ValueError(f"{value} out of range for {vt.name} [{low}, {high}]")
+    return value
+
+
+def _checked_int(vt: ua.VariantType) -> Callable[[str], int]:
+    return lambda text: _check_int_range(int(text), vt)
+
+
 # quasar Design dataType -> (VariantType, parser for XML string values)
 _TYPE_MAP: dict[str, tuple[ua.VariantType, Callable[[str], object]]] = {
     "OpcUa_Boolean": (ua.VariantType.Boolean, _parse_bool),
-    "OpcUa_SByte": (ua.VariantType.SByte, int),
-    "OpcUa_Byte": (ua.VariantType.Byte, int),
-    "OpcUa_Int16": (ua.VariantType.Int16, int),
-    "OpcUa_UInt16": (ua.VariantType.UInt16, int),
-    "OpcUa_Int32": (ua.VariantType.Int32, int),
-    "OpcUa_UInt32": (ua.VariantType.UInt32, int),
-    "OpcUa_Int64": (ua.VariantType.Int64, int),
-    "OpcUa_UInt64": (ua.VariantType.UInt64, int),
+    "OpcUa_SByte": (ua.VariantType.SByte, _checked_int(ua.VariantType.SByte)),
+    "OpcUa_Byte": (ua.VariantType.Byte, _checked_int(ua.VariantType.Byte)),
+    "OpcUa_Int16": (ua.VariantType.Int16, _checked_int(ua.VariantType.Int16)),
+    "OpcUa_UInt16": (ua.VariantType.UInt16, _checked_int(ua.VariantType.UInt16)),
+    "OpcUa_Int32": (ua.VariantType.Int32, _checked_int(ua.VariantType.Int32)),
+    "OpcUa_UInt32": (ua.VariantType.UInt32, _checked_int(ua.VariantType.UInt32)),
+    "OpcUa_Int64": (ua.VariantType.Int64, _checked_int(ua.VariantType.Int64)),
+    "OpcUa_UInt64": (ua.VariantType.UInt64, _checked_int(ua.VariantType.UInt64)),
     "OpcUa_Float": (ua.VariantType.Float, float),
     "OpcUa_Double": (ua.VariantType.Double, float),
     "UaString": (ua.VariantType.String, str),
@@ -80,11 +104,9 @@ def parse_design_value(text: str, quasar_data_type: str) -> object:
     return parser(text)
 
 
-def parse_design_array(text: str | None, quasar_data_type: str) -> list[object]:
-    """Parse an xsd:list style array value (whitespace-separated tokens)."""
-    if text is None or text.strip() == "":
-        return []
-    return [parse_design_value(token, quasar_data_type) for token in text.split()]
+def parse_design_array(values: list[str], quasar_data_type: str) -> list[object]:
+    """Parse an array of XML string values (one per <value> config element)."""
+    return [parse_design_value(token, quasar_data_type) for token in values]
 
 
 def initial_status(status_text: str) -> int:
@@ -107,4 +129,10 @@ def make_variant(value: object, quasar_data_type: str, is_array: bool) -> ua.Var
         return value if isinstance(value, ua.Variant) else ua.Variant(value)
     if is_array and not isinstance(value, (list, tuple)):
         raise TypeError(f"array cache variable expects a list, got {type(value).__name__}")
+    if vt in _INT_RANGES:
+        if is_array:
+            for element in value:
+                _check_int_range(element, vt)
+        else:
+            _check_int_range(value, vt)
     return ua.Variant(list(value) if is_array else value, vt, is_array=is_array)

@@ -61,11 +61,21 @@ class QuasarObject:
             ua.StatusCode(status if status is not None else ua.StatusCodes.Good),
             SourceTimestamp=source_timestamp or datetime.now(timezone.utc),
         )
-        await self._ua_server.write_attribute_value(node.nodeid, data_value)
+        # Server.write_attribute_value discards the address-space StatusCode, so go
+        # one layer down: a refused write (e.g. null into a nullForbidden variable)
+        # must raise, not silently keep the old value.
+        result = await self._ua_server.iserver.aspace.write_attribute_value(
+            node.nodeid, ua.AttributeIds.Value, data_value
+        )
+        if result is not None and not result.is_good():
+            raise ua.UaStatusCodeError(result.value)
 
     async def get_cv(self, name: str) -> object:
-        """Read a cache variable's current value."""
-        return await self.cache_variables[name].read_value()
+        """Read a cache variable's current value (None while its status is bad)."""
+        data_value = await self.cache_variables[name].read_data_value(
+            raise_on_bad_status=False
+        )
+        return data_value.Value.Value
 
     def __getattr__(self, name: str):
         setters = self.__dict__.get("_setters", {})

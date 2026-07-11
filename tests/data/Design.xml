@@ -6,7 +6,8 @@
   <d:class name="SCA">
     <d:devicelogic/>
     <d:cachevariable name="online" dataType="OpcUa_UInt32" addressSpaceWrite="forbidden"
-                     initializeWith="valueAndStatus" initialStatus="OpcUa_BadWaitingForInitialData"/>
+                     initializeWith="valueAndStatus" nullPolicy="nullAllowed"
+                     initialStatus="OpcUa_BadWaitingForInitialData"/>
     <d:cachevariable name="id" dataType="UaString" addressSpaceWrite="forbidden"
                      initializeWith="configuration" nullPolicy="nullAllowed"/>
     <d:cachevariable name="temperature" dataType="OpcUa_Double" addressSpaceWrite="regular"
@@ -25,8 +26,8 @@
   <d:class name="Chip">
     <d:devicelogic/>
     <d:cachevariable name="bar" dataType="OpcUa_Double" addressSpaceWrite="forbidden"
-                     initializeWith="valueAndStatus" initialValue="3.14"
-                     initialStatus="OpcUa_Good"/>
+                     initializeWith="valueAndStatus" nullPolicy="nullForbidden"
+                     initialValue="3.14" initialStatus="OpcUa_Good"/>
   </d:class>
   <d:root>
     <d:hasobjects instantiateUsing="configuration" class="SCA"/>

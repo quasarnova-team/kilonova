@@ -100,7 +100,9 @@ class AddressSpaceBuilder:
         _log.debug("instantiating %s %r", klass.name, address)
 
         if klass.single_variable_node:
-            node = await self._add_single_variable_node(parent_node, node_id, browse_name, klass)
+            node = await self._add_single_variable_node(
+                parent_node, node_id, browse_name, klass, instance
+            )
             quasar_object = QuasarObject(self._server, klass, node, address)
             quasar_object.cache_variables[klass.the_single_variable.name] = node
         else:
@@ -135,13 +137,13 @@ class AddressSpaceBuilder:
 
     async def _add_single_variable_node(
         self, parent_node: Node, node_id: ua.NodeId, browse_name: ua.QualifiedName,
-        klass: QuasarClass,
+        klass: QuasarClass, instance: Instance,
     ) -> Node:
         """singleVariableNode classes collapse to one variable named as the instance."""
         cv = klass.the_single_variable
-        data_value = self._initial_data_value(cv, instance=None)
+        data_value = self._initial_data_value(cv, instance)
         node = await parent_node.add_variable(
-            node_id, browse_name, data_value.Value, datatype=oracle.data_type_node_id(cv.data_type)
+            node_id, browse_name, data_value.Value, datatype=self._data_type_attribute(cv)
         )
         await self._finalize_variable(node, cv, data_value)
         return node
@@ -155,33 +157,39 @@ class AddressSpaceBuilder:
             node_id,
             ua.QualifiedName(cv.name, self._ns),
             data_value.Value,
-            datatype=oracle.data_type_node_id(cv.data_type),
+            datatype=self._data_type_attribute(cv),
         )
         await self._finalize_variable(node, cv, data_value)
         return node
 
+    @staticmethod
+    def _data_type_attribute(cv: CacheVariable) -> ua.NodeId:
+        """C++ quasar sets the concrete DataType only for nullForbidden variables;
+        nullAllowed ones keep BaseDataType so null writes stay legal."""
+        if cv.null_policy == "nullForbidden":
+            return oracle.data_type_node_id(cv.data_type)
+        return oracle.BASE_DATA_TYPE
+
     async def _add_config_entry(
         self, object_node: Node, parent_address: str, entry: ConfigEntry, instance: Instance
     ) -> None:
-        """Config entries surface as read-only properties, like C++ quasar exposes them."""
+        """Scalar config entries surface as read-only properties, like C++ quasar
+        exposes them; array entries stay config-only (C++ parity)."""
         if entry.is_array:
-            raw_text = instance.array_values.get(entry.name)
-            value = (
-                oracle.parse_design_array(raw_text, entry.data_type)
-                if entry.name in instance.array_values
-                else None
-            )
-        else:
-            raw = instance.attributes.get(entry.name)
+            return
+        raw = instance.attributes.get(entry.name)
+        try:
             value = oracle.parse_design_value(raw, entry.data_type) if raw is not None else None
-        variant = oracle.make_variant(value, entry.data_type, entry.is_array)
+        except ValueError as exc:
+            raise ConfigurationError(f"{instance.name}.{entry.name}: {exc}") from exc
+        variant = oracle.make_variant(value, entry.data_type, is_array=False)
         node = await object_node.add_property(
             ua.NodeId(f"{parent_address}.{entry.name}", self._ns),
             ua.QualifiedName(entry.name, self._ns),
             variant,
             datatype=oracle.data_type_node_id(entry.data_type),
         )
-        await self._write_value_rank(node, self._value_rank(entry.is_array, entry.data_type))
+        await self._write_value_rank(node, self._value_rank(False, entry.data_type))
 
     async def _add_method(self, object_node: Node, parent_address: str, method: Method) -> None:
         address = f"{parent_address}.{method.name}"
@@ -269,30 +277,35 @@ class AddressSpaceBuilder:
             return ua.DataValue(variant, ua.StatusCode(status))
 
         if cv.initialize_with == "configuration":
-            raw: str | None = None
-            if instance is not None and cv.is_array:
-                if cv.name in instance.array_values:
-                    values = oracle.parse_design_array(
-                        instance.array_values[cv.name], cv.data_type
-                    )
-                    variant = oracle.make_variant(values, cv.data_type, is_array=True)
-                    return ua.DataValue(variant, ua.StatusCode(ua.StatusCodes.Good))
-            elif instance is not None:
-                raw = instance.attributes.get(cv.name)
+            where = instance.name if instance is not None else "<design>"
+            try:
+                if cv.is_array:
+                    if instance is not None and cv.name in instance.array_values:
+                        values = oracle.parse_design_array(
+                            instance.array_values[cv.name], cv.data_type
+                        )
+                        variant = oracle.make_variant(values, cv.data_type, is_array=True)
+                        return ua.DataValue(variant, ua.StatusCode(ua.StatusCodes.Good))
+                    raw = None
+                else:
+                    raw = instance.attributes.get(cv.name) if instance is not None else None
+                    if raw is None:
+                        raw = cv.default_config_initializer_value
 
-            if raw is None:
-                if cv.null_policy == "nullForbidden":
-                    where = instance.name if instance else "<design>"
-                    raise ConfigurationError(
-                        f"{where}: cache variable {cv.name} is nullForbidden but the "
-                        "configuration provides no value"
+                if raw is None:
+                    if cv.null_policy == "nullForbidden":
+                        raise ConfigurationError(
+                            f"{where}: cache variable {cv.name} is nullForbidden but the "
+                            "configuration provides no value"
+                        )
+                    return ua.DataValue(
+                        ua.Variant(None, ua.VariantType.Null),
+                        ua.StatusCode(ua.StatusCodes.Good),
                     )
-                return ua.DataValue(
-                    ua.Variant(None, ua.VariantType.Null),
-                    ua.StatusCode(ua.StatusCodes.Good),
-                )
-            value = oracle.parse_design_value(raw, cv.data_type)
-            variant = oracle.make_variant(value, cv.data_type, cv.is_array)
+                value = oracle.parse_design_value(raw, cv.data_type)
+                variant = oracle.make_variant(value, cv.data_type, cv.is_array)
+            except ValueError as exc:
+                raise ConfigurationError(f"{where}.{cv.name}: {exc}") from exc
             return ua.DataValue(variant, ua.StatusCode(ua.StatusCodes.Good))
 
         raise DesignError(f"cache variable {cv.name}: unsupported initializeWith "

@@ -44,6 +44,9 @@ class CalculatedVariableConfig:
 
     name: str
     formula: str
+    initial_value: str | None = None
+    is_boolean: bool = False
+    status_formula: str | None = None
 
 
 @dataclass
@@ -134,7 +137,11 @@ def _parse_free_variable(element: etree._Element) -> FreeVariable:
 
 def _parse_calculated_variable(element: etree._Element) -> CalculatedVariableConfig:
     return CalculatedVariableConfig(
-        name=element.get("name"), formula=element.get("value")
+        name=element.get("name"),
+        formula=element.get("value"),
+        initial_value=element.get("initialValue"),
+        is_boolean=element.get("isBoolean") == "true",
+        status_formula=element.get("status"),
     )
 
 

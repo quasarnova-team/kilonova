@@ -330,7 +330,10 @@ class Server:
                 fv.access_level,
             )
         for calc in configuration.calculated_variables:
-            await engine.add_calculated_variable(objects_folder, "", calc.name, calc.formula)
+            await engine.add_calculated_variable(
+                objects_folder, "", calc.name, calc.formula,
+                calc.initial_value, calc.is_boolean, calc.status_formula,
+            )
         await engine.wire_and_evaluate()
 
         self.objects = builder.objects

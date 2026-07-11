@@ -116,3 +116,36 @@ async def test_formula_meta_functions(tmp_path):
     server, url = await boot(tmp_path, design_body, config)
     async with server, Client(url=url) as client:
         assert await client.get_node(ua.NodeId("a1.s1.c", 2)).read_value() == pytest.approx(15.0)
+
+
+async def test_cv_initial_value_is_boolean_and_status(tmp_path):
+    """C++ parity: initialValue published Good pre-evaluation; status formula
+    decides Good/Bad; isBoolean publishes a Bool."""
+    config = (
+        '<A name="a1">'
+        '<CalculatedVariable name="pre" value="a1.x * 2" initialValue="7"/>'
+        '<CalculatedVariable name="flag" value="1" isBoolean="true"/>'
+        '<CalculatedVariable name="gated" value="42" status="a1.x &gt; 0"/>'
+        "</A>"
+    )
+    server, url = await boot(tmp_path, DESIGN, config)
+    async with server, Client(url=url) as client:
+        def node(path):
+            return client.get_node(ua.NodeId(path, 2))
+        # x is null -> value formula cannot evaluate, but initialValue holds, Good
+        dv = await node("a1.pre").read_data_value(raise_on_bad_status=False)
+        assert dv.Value.Value == pytest.approx(7.0)
+        assert dv.StatusCode.is_good()
+
+        flag = await node("a1.flag").read_data_value()
+        assert flag.Value.Value is True
+        assert flag.Value.VariantType == ua.VariantType.Boolean
+
+        gated = await node("a1.gated").read_data_value(raise_on_bad_status=False)
+        assert not gated.StatusCode.is_good()  # status formula input null -> Bad
+
+        await node("a1.x").write_value(ua.Variant(3.0, ua.VariantType.Double))
+        assert await node("a1.pre").read_value() == pytest.approx(6.0)
+        gated = await node("a1.gated").read_data_value()
+        assert gated.Value.Value == pytest.approx(42.0)
+        assert gated.StatusCode.is_good()

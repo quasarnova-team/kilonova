@@ -211,13 +211,21 @@ _FREE_VARIABLE_PARSERS = {
 }
 
 
+@dataclass
+class _CalculatedSpec:
+    value: CompiledFormula
+    status: CompiledFormula | None = None
+    is_boolean: bool = False
+    initial_pending: bool = False  # initialValue holds until first good evaluation
+
+
 class CalculatedVariablesEngine:
     """Owns free variables, formulas, the dependency graph, and recomputation."""
 
     def __init__(self, ua_server, namespace_index: int):
         self._server = ua_server
         self._ns = namespace_index
-        self._formulas: dict[str, CompiledFormula] = {}
+        self._formulas: dict[str, _CalculatedSpec] = {}
         self._dependents: dict[str, list[str]] = {}
         self._generic_formulas: dict[str, str] = {}
         self._last: dict[str, object] = {}
@@ -294,20 +302,45 @@ class CalculatedVariablesEngine:
             await node.set_writable(True)
 
     async def add_calculated_variable(
-        self, parent_node, parent_address: str, name: str, formula_text: str
+        self, parent_node, parent_address: str, name: str, formula_text: str,
+        initial_value: str | None = None, is_boolean: bool = False,
+        status_formula: str | None = None,
     ) -> None:
         address = f"{parent_address}.{name}" if parent_address else name
         resolved, aliases = self.resolve_formula_text(formula_text, parent_address)
-        compiled = compile_formula(resolved, aliases)
+        compiled_status = None
+        if status_formula is not None:
+            resolved_status, status_aliases = self.resolve_formula_text(
+                status_formula, parent_address
+            )
+            compiled_status = compile_formula(resolved_status, status_aliases)
+        spec = _CalculatedSpec(
+            value=compile_formula(resolved, aliases),
+            status=compiled_status,
+            is_boolean=is_boolean,
+            initial_pending=initial_value is not None,
+        )
+        # C++ parity: initialValue is published with Good status before the
+        # first evaluation; otherwise the variable starts null
+        if initial_value is not None:
+            raw = float(initial_value)
+            initial = ua.Variant(bool(raw) if is_boolean else raw,
+                                 ua.VariantType.Boolean if is_boolean
+                                 else ua.VariantType.Double)
+        else:
+            initial = ua.Variant(None, ua.VariantType.Null)
         # like the C++ oracle: calculated variables expose BaseDataType, read-only
         await parent_node.add_variable(
             ua.NodeId(address, self._ns),
             ua.QualifiedName(name, self._ns),
-            ua.Variant(None, ua.VariantType.Null),
+            initial,
             datatype=ua.NodeId(ua.ObjectIds.BaseDataType),
         )
-        self._formulas[address] = compiled
-        for input_address in compiled.inputs:
+        self._formulas[address] = spec
+        inputs = set(spec.value.inputs)
+        if compiled_status is not None:
+            inputs |= set(compiled_status.inputs)
+        for input_address in inputs:
             self._dependents.setdefault(input_address, []).append(address)
 
     async def wire_and_evaluate(self) -> None:
@@ -335,7 +368,8 @@ class CalculatedVariablesEngine:
 
     async def _recompute(self, address: str) -> None:
         aspace = self._server.iserver.aspace
-        compiled = self._formulas[address]
+        spec = self._formulas[address]
+        compiled = spec.value
         env: dict[str, float] = {}
         good = True
         # C++ parity: inputs still waiting propagate BadWaitingForInitialData;
@@ -364,15 +398,43 @@ class CalculatedVariablesEngine:
             except ArithmeticError:
                 good = False
                 bad_status = ua.StatusCodes.Bad
+        if good and spec.status is not None:
+            # C++ parity: the status formula decides Good/Bad (non-zero = Good)
+            status_env: dict[str, float] = {}
+            for input_address in spec.status.inputs:
+                dv = aspace.read_attribute_value(
+                    ua.NodeId(input_address, self._ns), ua.AttributeIds.Value
+                )
+                value = dv.Value.Value if dv.Value is not None else None
+                if value is None or (dv.StatusCode is not None and not dv.StatusCode.is_good()):
+                    good = False
+                    bad_status = ua.StatusCodes.Bad
+                    break
+                status_env[input_address] = float(value)
+            else:
+                try:
+                    if evaluate(spec.status, status_env) == 0.0:
+                        good = False
+                        bad_status = ua.StatusCodes.Bad
+                except ArithmeticError:
+                    good = False
+                    bad_status = ua.StatusCodes.Bad
+        if good and spec.is_boolean:
+            result = bool(result)
+        if not good and spec.initial_pending:
+            return  # C++ parity: initialValue (Good) holds until first good evaluation
+        if good:
+            spec.initial_pending = False
         new = (result, ua.StatusCodes.Good) if good else (None, bad_status)
         if self._last.get(address) == new:
             return  # unchanged: stop propagation (also breaks accidental cycles)
         self._last[address] = new
-        data_value = (
-            ua.DataValue(ua.Variant(new[0], ua.VariantType.Double), ua.StatusCode(new[1]))
-            if good
-            else ua.DataValue(ua.Variant(None, ua.VariantType.Null), ua.StatusCode(new[1]))
-        )
+        if good:
+            variant_type = ua.VariantType.Boolean if spec.is_boolean else ua.VariantType.Double
+            data_value = ua.DataValue(ua.Variant(new[0], variant_type), ua.StatusCode(new[1]))
+        else:
+            data_value = ua.DataValue(ua.Variant(None, ua.VariantType.Null),
+                                      ua.StatusCode(new[1]))
         await aspace.write_attribute_value(
             ua.NodeId(address, self._ns), ua.AttributeIds.Value, data_value
         )

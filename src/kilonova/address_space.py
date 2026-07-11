@@ -185,7 +185,8 @@ class AddressSpaceBuilder:
                 )
             for calc in instance.calculated_variables:
                 await self._calculated.add_calculated_variable(
-                    node, address, calc.name, calc.formula
+                    node, address, calc.name, calc.formula,
+                    calc.initial_value, calc.is_boolean, calc.status_formula,
                 )
 
         # children from the configuration...

@@ -38,7 +38,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M9 | CalculatedVariables (safe formula eval) | Client reads computed value | done |
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | done |
 | M11 | Config restrictions + cardinality validation | invalid config rejected like C++ Configurator | done |
-| M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against microquasar | generated client works unmodified | pending |
+| M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against microquasar | generated client works unmodified | done (local legs) |
 | M13 | parity-night third backend column (production servers) | probe parity vs live C++ backends | done — ATCA/CAEN full structural parity; CanOpen surfaced 2 cross-backend quirks (see .parity-night/cells/*-microquasar/deps-note.txt) |
 
 ## Current parity table (M6 gate, StandardMetaData ignored)
@@ -79,6 +79,15 @@ eval), inputs are dotted addresses, `$thisObjectAddress` and `$applyGenericFormu
 are substituted, and recalculation runs through server-side datachange callbacks — a
 dependent recomputes *inside* the write that changed its input, so the next read is fresh.
 Any null/bad input yields BadWaitingForInitialData. **All 12 quasar CI oracle cases now pass.**
+
+M12 (ecosystem smoke, local legs — 2026-07-11): Cacophony generates its WinCC OA CTRL
+artifacts cleanly from microquasar-served designs, and `tools/cacophony_crosscheck.py`
+verifies every periphery address the generated configParser.ctl would assign resolves on a
+live microquasar server: 8/8 on the SCA demo, **600/600 on the production ATCA design**.
+UaoForQuasar client classes generate cleanly for production classes (Manager/Board/FanTray)
+and their generated NodeId construction (`parentId + ".var"`, parent namespace) is exactly
+microquasar's addressing. Deferred: compiling/running the generated C++ client (needs UASDK
+— a docker parity-image job, natural follow-up in the parity-night campaign).
 
 ## Design decisions (2026 rewrite, vs the 2021 MilkyWay prototype)
 

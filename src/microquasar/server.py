@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 import asyncua
 from asyncua import ua
+from asyncua.common.callback import CallbackType
 
 from microquasar import oracle
 from microquasar.address_space import AddressSpaceBuilder
@@ -48,6 +51,11 @@ class Server:
         self.ua_server: asyncua.Server | None = None
         self.objects: dict[str, QuasarObject] = {}
         self._method_handlers: dict[str, object] = {}
+        self._read_handlers: dict[str, object] = {}
+        self._write_handlers: dict[str, object] = {}
+        self._source_specs: dict[str, object] = {}
+        self._delegated_addresses: set[str] = set()
+        self._source_locks: dict[str, asyncio.Lock] = {}
         self._initialized = False
 
     def method(self, address: str):
@@ -71,6 +79,167 @@ class Server:
             return handler
 
         return decorator
+
+    def read(self, address: str):
+        """Register an async read handler for a source variable, by dotted address.
+
+        The handler runs *inside* the client's read transaction (quasar's
+        synchronous read mode)::
+
+            @server.read("sca1.adc")
+            async def read_adc(obj):
+                return await hardware.read_adc()          # value, or
+                # return value, ua.StatusCodes.Good        # (value, status), or
+                # return ua.DataValue(...)                 # full control
+        """
+
+        def decorator(handler):
+            self._read_handlers[address] = handler
+            return handler
+
+        return decorator
+
+    def write(self, address: str):
+        """Register an async write handler for a source variable or a
+        ``addressSpaceWrite="delegated"`` cache variable.
+
+        The handler runs before the value is stored; raise
+        ``ua.UaStatusCodeError`` to refuse the write with that status::
+
+            @server.write("sca1.dac")
+            async def write_dac(obj, value):
+                if not 0 <= value <= 10:
+                    raise ua.UaStatusCodeError(ua.StatusCodes.BadOutOfRange)
+                await hardware.write_dac(value)
+        """
+
+        def decorator(handler):
+            self._write_handlers[address] = handler
+            return handler
+
+        return decorator
+
+    def _string_address(self, node_id: ua.NodeId) -> str | None:
+        if node_id.NamespaceIndex == QUASAR_NAMESPACE_INDEX and isinstance(
+            node_id.Identifier, str
+        ):
+            return node_id.Identifier
+        return None
+
+    async def _on_pre_read(self, event, _dispatcher=None) -> None:
+        """asyncua PreRead callback: refresh source variables through device logic
+        before the read transaction answers (quasar synchronous read semantics)."""
+        params = event.request_params
+        if params is None or not params.NodesToRead:
+            return
+        refreshed = set()
+        for read_value in params.NodesToRead:
+            if read_value.AttributeId != ua.AttributeIds.Value:
+                continue
+            address = self._string_address(read_value.NodeId)
+            if not address or address in refreshed or address not in self._source_specs:
+                continue
+            handler = self._read_handlers.get(address)
+            if handler is None:
+                continue
+            refreshed.add(address)
+            await self._refresh_source_variable(address, handler)
+
+    async def _refresh_source_variable(self, address: str, handler) -> None:
+        lock = self._source_locks.setdefault(address, asyncio.Lock())
+        async with lock:
+            spec = self._source_specs[address]
+            owner = self.objects[address.rsplit(".", 1)[0]]
+            now = datetime.now(timezone.utc)
+            try:
+                result = handler(owner)
+                if inspect.isawaitable(result):
+                    result = await result
+                if isinstance(result, ua.DataValue):
+                    data_value = result
+                else:
+                    if (
+                        isinstance(result, tuple)
+                        and len(result) == 2
+                        and isinstance(result[1], int)
+                    ):
+                        value, status = result
+                    else:
+                        value, status = result, ua.StatusCodes.Good
+                    data_value = ua.DataValue(
+                        oracle.make_variant(value, spec.data_type, spec.is_array),
+                        ua.StatusCode(status),
+                        SourceTimestamp=now,
+                    )
+            except ua.UaStatusCodeError as exc:
+                data_value = ua.DataValue(
+                    ua.Variant(None, ua.VariantType.Null),
+                    ua.StatusCode(exc.code),
+                    SourceTimestamp=now,
+                )
+            except Exception:
+                _log.exception("source variable %s: read handler failed", address)
+                data_value = ua.DataValue(
+                    ua.Variant(None, ua.VariantType.Null),
+                    ua.StatusCode(ua.StatusCodes.BadInternalError),
+                    SourceTimestamp=now,
+                )
+            await self.ua_server.iserver.aspace.write_attribute_value(
+                ua.NodeId(address, QUASAR_NAMESPACE_INDEX), ua.AttributeIds.Value, data_value
+            )
+
+    def _install_write_hook(self) -> None:
+        """Intercept client writes to delegated/source variables so device logic
+        decides the per-item status before anything is stored."""
+        service = self.ua_server.iserver.attribute_service
+        original_write = service.write
+
+        async def write_one(write_value, *args, **kwargs) -> ua.StatusCode:
+            params = ua.WriteParameters(NodesToWrite=[write_value])
+            return (await original_write(params, *args, **kwargs))[0]
+
+        async def write_hook(params, *args, **kwargs):
+            results = []
+            for write_value in params.NodesToWrite:
+                address = (
+                    self._string_address(write_value.NodeId)
+                    if write_value.AttributeId == ua.AttributeIds.Value
+                    else None
+                )
+                delegated = address is not None and (
+                    address in self._delegated_addresses
+                    or (
+                        address in self._source_specs
+                        and self._source_specs[address].is_writable
+                    )
+                )
+                if not delegated:
+                    results.append(await write_one(write_value, *args, **kwargs))
+                    continue
+                handler = self._write_handlers.get(address)
+                if handler is None:
+                    results.append(ua.StatusCode(ua.StatusCodes.BadNotImplemented))
+                    continue
+                owner = self.objects[address.rsplit(".", 1)[0]]
+                raw = write_value.Value
+                value = raw.Value.Value if raw is not None and raw.Value is not None else None
+                try:
+                    outcome = handler(owner, value)
+                    if inspect.isawaitable(outcome):
+                        await outcome
+                except ua.UaStatusCodeError as exc:
+                    results.append(ua.StatusCode(exc.code))
+                    continue
+                except Exception:
+                    _log.exception("delegated write %s: handler failed", address)
+                    results.append(ua.StatusCode(ua.StatusCodes.BadInternalError))
+                    continue
+                # device logic accepted: store through the normal service path
+                # (type checks, timestamps, datachange notifications)
+                results.append(await write_one(write_value, *args, **kwargs))
+            return results
+
+        service.write = write_hook
 
     def _make_method_dispatcher(self, parent_address: str, method: Method):
         method_address = f"{parent_address}.{method.name}"
@@ -143,6 +312,10 @@ class Server:
         await builder.instantiate_from_config(instances)
 
         self.objects = builder.objects
+        self._source_specs = builder.source_variables
+        self._delegated_addresses = builder.delegated_cache_variables
+        self.ua_server.subscribe_server_callback(CallbackType.PreRead, self._on_pre_read)
+        self._install_write_hook()
         self._initialized = True
         _log.info(
             "microquasar: design %r, %d classes, %d objects",

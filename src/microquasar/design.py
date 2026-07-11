@@ -82,9 +82,21 @@ class Method:
 
 @dataclass(frozen=True)
 class SourceVariable:
-    """A d:sourcevariable — parsed for totality, not served yet (see PLAN M8)."""
+    """A d:sourcevariable — reads/writes are delegated to device logic."""
 
     name: str
+    data_type: str
+    address_space_read: str = "forbidden"  # forbidden | synchronous | asynchronous
+    address_space_write: str = "forbidden"
+    is_array: bool = False
+
+    @property
+    def is_readable(self) -> bool:
+        return self.address_space_read != "forbidden"
+
+    @property
+    def is_writable(self) -> bool:
+        return self.address_space_write != "forbidden"
 
 
 @dataclass(frozen=True)
@@ -209,7 +221,17 @@ def _parse_class(element: etree._Element) -> QuasarClass:
         elif tag == "devicelogic":
             has_device_logic = True
         elif tag == "sourcevariable":
-            source_variables.append(SourceVariable(name=child.get("name")))
+            source_variables.append(
+                SourceVariable(
+                    name=_required(child, "name"),
+                    data_type=_required(child, "dataType"),
+                    address_space_read=child.get("addressSpaceRead", "forbidden"),
+                    address_space_write=child.get("addressSpaceWrite", "forbidden"),
+                    is_array=any(
+                        isinstance(g.tag, str) and _local(g.tag) == "array" for g in child
+                    ),
+                )
+            )
         elif tag == "calculatedvariable":
             calculated_variables.append(
                 CalculatedVariable(name=child.get("name"), value=child.get("value"))

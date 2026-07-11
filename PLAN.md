@@ -30,7 +30,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M5 | MilkyWay parity: `set_cv`, generated `setXxx` setters, live demo | Client subscribes, sees ticking value | done |
 | M6 | Conformance runner + dumper (uasak_dump equivalent) | parity table over quasar CI cases | done |
 | M7 | Methods: nodes + real async handlers (decorator API) | Client calls method, gets result | done |
-| M8 | Source variables + delegated-write callbacks | Client read/write triggers user coroutine | pending |
+| M8 | Source variables + delegated-write callbacks | Client read/write triggers user coroutine | done |
 | M9 | CalculatedVariables (safe formula eval) | Client reads computed value | pending |
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | pending |
 | M11 | Config XSD validation + restrictions | invalid config rejected like C++ Configurator | pending |
@@ -53,11 +53,20 @@ As of M6 (all verified by `pytest tests/conformance`, 2026-07-11):
 | instantiation_from_design | PASS |
 | config_restrictions | PASS |
 | defaulted_instance_name | PASS |
-| source_variables | xfail (M8) |
+| source_variables | PASS |
 | calculated_variables | xfail (M9) |
 
 Method *nodes* (incl. `.args`/`.return_values` argument properties) are at parity as part of
 M6; M7 added callable handlers via the `@server.method("sca1.scale")` decorator API.
+
+M8 (source variables): `@server.read("sca1.adc")` runs the device coroutine *inside* the
+client's read transaction (asyncua's awaited PreRead callback — true quasar synchronous-read
+semantics, impossible in the 2021 sync prototype); `@server.write(...)` intercepts client
+writes to source variables and `addressSpaceWrite="delegated"` cache variables before storage
+(raise `ua.UaStatusCodeError` to refuse with a real per-item status; unhandled delegated
+writes answer BadNotImplemented). AccessLevel encodes the design's read/write modes
+(read-only 1, write-only 2, read-write 3); until first device interaction source variables
+serve BadWaitingForInitialData. Server-side `set_cv` bypasses delegation by design.
 
 ## Design decisions (2026 rewrite, vs the 2021 MilkyWay prototype)
 

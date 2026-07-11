@@ -39,6 +39,7 @@ class QuasarObject:
         self.node = node
         self.address = address
         self.cache_variables: dict[str, Node] = {}
+        self.source_variables: dict[str, Node] = {}
         self._setters = {setter_name(cv.name): cv.name for cv in quasar_class.cache_variables}
 
     @property

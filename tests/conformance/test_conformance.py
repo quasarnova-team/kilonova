@@ -26,7 +26,6 @@ CASES_DIR = QUASAR_ROOT / ".CI" / "test_cases"
 
 # Cases whose features are planned but not implemented yet (see PLAN.md).
 NOT_YET: dict[str, str] = {
-    "source_variables": "M8: source variables",
     "calculated_variables": "M9: calculated variables",
 }
 

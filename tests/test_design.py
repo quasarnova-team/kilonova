@@ -19,7 +19,12 @@ def test_parses_the_sca_design():
     assert set(design.classes) == {"SCA", "Chip"}
 
     sca = design.classes["SCA"]
-    assert [cv.name for cv in sca.cache_variables] == ["online", "id", "temperature", "channels"]
+    assert [cv.name for cv in sca.cache_variables] == [
+        "online", "id", "temperature", "channels", "target",
+    ]
+    assert [sv.name for sv in sca.source_variables] == ["adc", "dac"]
+    assert sca.source_variables[0].is_readable
+    assert not sca.source_variables[0].is_writable
     assert [m.name for m in sca.methods] == ["reset", "scale"]
     scale = sca.methods[1]
     assert scale.arguments[0].data_type == "OpcUa_Double"

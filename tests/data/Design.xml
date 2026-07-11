@@ -16,6 +16,14 @@
                      initializeWith="configuration" nullPolicy="nullForbidden">
       <d:array/>
     </d:cachevariable>
+    <d:cachevariable name="target" dataType="OpcUa_Double" addressSpaceWrite="delegated"
+                     initializeWith="configuration" nullPolicy="nullAllowed"/>
+    <d:sourcevariable name="adc" dataType="OpcUa_Double" addressSpaceRead="synchronous"
+                      addressSpaceWrite="forbidden" addressSpaceReadUseMutex="no"
+                      addressSpaceWriteUseMutex="no"/>
+    <d:sourcevariable name="dac" dataType="OpcUa_Double" addressSpaceRead="synchronous"
+                      addressSpaceWrite="synchronous" addressSpaceReadUseMutex="no"
+                      addressSpaceWriteUseMutex="no"/>
     <d:method name="reset"/>
     <d:method name="scale">
       <d:argument name="factor" dataType="OpcUa_Double"/>

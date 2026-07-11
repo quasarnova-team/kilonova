@@ -22,6 +22,7 @@ from microquasar.design import (
     Method,
     MethodArgument,
     QuasarClass,
+    SourceVariable,
 )
 from microquasar.errors import ConfigurationError, DesignError
 from microquasar.objects import QuasarObject
@@ -52,6 +53,10 @@ class AddressSpaceBuilder:
         self._type_nodes: dict[str, Node] = {}
         #: All instantiated objects keyed by their dotted string address.
         self.objects: dict[str, QuasarObject] = {}
+        #: Source variable specs keyed by full dotted address.
+        self.source_variables: dict[str, SourceVariable] = {}
+        #: Full addresses of cache variables with addressSpaceWrite="delegated".
+        self.delegated_cache_variables: set[str] = set()
 
     # -- types ---------------------------------------------------------------
 
@@ -90,8 +95,6 @@ class AddressSpaceBuilder:
         self, instance: Instance, parent_node: Node, parent_address: str | None
     ) -> QuasarObject:
         klass = self._design.classes[instance.class_name]
-        if klass.source_variables:
-            raise DesignError(f"class {klass.name}: source variables not supported yet (M8)")
         if klass.calculated_variables:
             raise DesignError(f"class {klass.name}: calculated variables not supported yet (M9)")
         address = instance.name if parent_address is None else f"{parent_address}.{instance.name}"
@@ -113,6 +116,11 @@ class AddressSpaceBuilder:
             for cv in klass.cache_variables:
                 var_node = await self._add_cache_variable(node, address, cv, instance)
                 quasar_object.cache_variables[cv.name] = var_node
+                if cv.address_space_write == "delegated":
+                    self.delegated_cache_variables.add(f"{address}.{cv.name}")
+            for sv in klass.source_variables:
+                sv_node = await self._add_source_variable(node, address, sv)
+                quasar_object.source_variables[sv.name] = sv_node
             for entry in klass.config_entries:
                 await self._add_config_entry(node, address, entry, instance)
             for method in klass.methods:
@@ -169,6 +177,35 @@ class AddressSpaceBuilder:
         if cv.null_policy == "nullForbidden":
             return oracle.data_type_node_id(cv.data_type)
         return oracle.BASE_DATA_TYPE
+
+    async def _add_source_variable(
+        self, object_node: Node, parent_address: str, sv: SourceVariable
+    ) -> Node:
+        """Source variables delegate reads/writes to device logic; until the first
+        interaction they hold a null value with BadWaitingForInitialData."""
+        address = f"{parent_address}.{sv.name}"
+        initial = ua.DataValue(
+            ua.Variant(None, ua.VariantType.Null),
+            ua.StatusCode(ua.StatusCodes.BadWaitingForInitialData),
+        )
+        node = await object_node.add_variable(
+            ua.NodeId(address, self._ns),
+            ua.QualifiedName(sv.name, self._ns),
+            initial.Value,
+            # source variables always expose the concrete design type (per oracle)
+            datatype=oracle.data_type_node_id(sv.data_type),
+        )
+        await self._write_value_rank(node, self._value_rank(sv.is_array, sv.data_type))
+        access = (1 if sv.is_readable else 0) | (2 if sv.is_writable else 0)
+        for attribute in (ua.AttributeIds.AccessLevel, ua.AttributeIds.UserAccessLevel):
+            await self._server.write_attribute_value(
+                node.nodeid,
+                ua.DataValue(ua.Variant(access, ua.VariantType.Byte)),
+                attribute,
+            )
+        await self._server.write_attribute_value(node.nodeid, initial)
+        self.source_variables[address] = sv
+        return node
 
     async def _add_config_entry(
         self, object_node: Node, parent_address: str, entry: ConfigEntry, instance: Instance

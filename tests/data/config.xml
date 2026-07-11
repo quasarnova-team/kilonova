@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration xmlns="http://cern.ch/quasar/Configuration"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="http://cern.ch/quasar/Configuration Configuration.xsd">
+  <SCA name="sca1" id="theSCA" temperature="25.5">
+    <channels>1 2 3</channels>
+    <Chip name="chip0"/>
+  </SCA>
+</configuration>

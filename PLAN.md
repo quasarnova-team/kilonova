@@ -144,7 +144,7 @@ policy/mode pairs incl. Basic256Sha256 Sign/SignAndEncrypt with certificates, id
 tokens).
 
 Known deliberate residuals (each warns loudly at runtime where relevant):
-- mutex domain `handpicked` — raises "not supported yet".
+- mutex domain `handpicked` — implemented with C++ semantics: the framework applies no lock; the handler holds its own (v1.0.0).
 - ServerConfig PKI trust/revocation lists, session/subscription limits, tracing — logged
   as unsupported when configured.
-- Compiling/running a generated UaoForQuasar C++ client needs UASDK (docker) — external.
+- UaoForQuasar C++ client: PROVEN LIVE (v1.0.0, tools/uao_client_check) — compiled against UASDK in the el9 image, read a value python device logic set. Remaining external leg: a live WinCC OA connection (lab).

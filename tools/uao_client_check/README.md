@@ -3,7 +3,7 @@
 What is this?
 -------------
 
-The end-to-end proof that a UaoForQuasar-generated C++ client (compiled against the
+The end-to-end proof that a UaoForQuasar-generated C++ client (compiled against
 a UA-SDK-compatible stack) works unmodified against kilonova. Verified 2026-07-11: python device
 logic set `slotNumber=7` on a real production-grade design; the C++ client read it back
 (exit code 0).

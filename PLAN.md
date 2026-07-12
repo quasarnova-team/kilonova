@@ -40,6 +40,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M11 | Config restrictions + cardinality validation | invalid config rejected like C++ Configurator | done |
 | M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against kilonova | generated client works unmodified | done (local legs) |
 | M13 | parity-night third backend column (production servers) | probe parity vs live C++ backends | done — ATCA/CAEN full structural parity; CanOpen surfaced 2 cross-backend quirks (see .parity-night/cells/*-kilonova/deps-note.txt) |
+| M14 | Blocking device logic: plain-`def` handlers offloaded to a thread pool; loop watchdog; parallel source refresh in one read | contrast test pair: an offloaded blocking driver stalls nothing; the same call on the loop is detected and named | done (v1.1.0) |
 
 ## Current parity table (M6 gate; StandardMetaData compared in full for default_design, ignored elsewhere — like quasar's own CI)
 

@@ -29,7 +29,7 @@ Modules
 | `oracle.py` | quasar dataType ↔ OPC UA type maps, value parsing, integer ranges, configRestriction checks. (Named after quasar's own Oracle.) |
 | `address_space.py` | Builds ObjectTypes (`ns=2;i=1000+`) and instances (`ns=2;s=parent.child`). Owns the parity-critical attribute rules. |
 | `objects.py` | `QuasarObject`: `set_cv`, `get_cv`, generated `setXxx` async setters. |
-| `server.py` | Lifecycle + handler registries (`@server.method/read/write`), source-read PreRead hook, delegated-write interception. |
+| `server.py` | Lifecycle + handler registries (`@server.method/read/write`), source-read PreRead hook, delegated-write interception, thread pool for plain-`def` handlers, loop watchdog. |
 | `calculated.py` | Config-level CalculatedVariables/FreeVariables: whitelisted-AST formulas (no `eval`), datachange-driven recalculation. |
 | `meta.py` | StandardMetaData, live: log-level nodes drive Python logging. |
 | `dump.py` | Client-side NodeSet2 dump + reference comparison (the conformance gate). |
@@ -50,5 +50,9 @@ Design decisions
   AccessLevel from `addressSpaceWrite` or source read/write modes.
 - **Handlers are late-bound by address.** Registration works before or after `start()`;
   unregistered methods/writes answer proper OPC UA status codes.
+- **Two kinds of handlers** (since 1.1): `async def` runs on the event loop and must not
+  block; plain `def` runs in a small thread pool (`offload_workers`), so a blocking vendor
+  driver delays one transaction, never the server. The loop watches itself: a stall longer
+  than `watchdog` seconds is logged with the device logic that overlapped it.
 - **One asyncua override**, documented in `server.py`: BaseDataType variables accept any
   concrete value type (OPC UA Part 3 semantics; upstream FIXME).

@@ -10,6 +10,8 @@ public conformance suite passes on every commit, on three operating systems.
 
 Built for the jobs where a server must exist *now*: device simulators, test rigs,
 FAT/SAT stand-ins, CI test doubles, edge gateways and reference implementations.
+supernova is the engine for hardened plant-floor deployment — the same Design file
+runs on both.
 
 ## Install
 

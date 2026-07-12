@@ -18,7 +18,9 @@ OPC UA clients — work against it unmodified.
 
 Built for the jobs where a server must exist *now*: device simulators, test rigs,
 FAT/SAT stand-ins, CI test doubles, edge gateways for network-attached hardware, and
-reference implementations while the C++ server is still being written.
+reference implementations while your C++ server is still being written.
+supernova is the engine for hardened plant-floor deployment — the same Design file
+runs on both.
 
 A *kilonova* is the luminous flash of a neutron-star merger — a lighter, faster transient
 in the nova family. This kilonova is the pure-Python engine of the
@@ -26,8 +28,8 @@ in the nova family. This kilonova is the pure-Python engine of the
 [MilkyWay](https://github.com/quasar-team/MilkyWay) (the 2021 pure-Python prototype),
 rebuilt from scratch on [asyncua](https://github.com/FreeOpcUa/opcua-asyncio) 2.x.
 
-Basic usage mode
-----------------
+Quick start
+-----------
 
 1. Install (Python ≥ 3.10): `pip install kilonova`
 1. Run your existing quasar server's design, unchanged:

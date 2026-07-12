@@ -1,5 +1,24 @@
 # ChangeLog
 
+1.1.0 (2026-07-12)
+------------------
+- Blocking device logic: plain `def` handlers (read/write/method) now run in a
+  server thread pool (`Server(offload_workers=8)`) — a blocking driver call
+  delays its own transaction, never the server. `async def` handlers are
+  unchanged (event loop, must not block). New `server.offload(func, *args)`
+  awaits a blocking callable from async handlers.
+  **Behaviour change:** before 1.1 a plain `def` handler ran inline on the
+  event loop (undocumented). Such a handler now runs in a worker thread: it
+  must not call asyncio APIs (the server logs a targeted hint if it does) and
+  it may run concurrently with other handlers unless a mutex domain says
+  otherwise. Documented (`async def`) handlers are unaffected.
+- Loop watchdog (`Server(watchdog=0.25)`, seconds; `None` disables): logs a
+  warning when something blocks the event loop, naming the device logic that
+  overlapped the stall.
+- Independent source variables in one read transaction now refresh
+  concurrently; Design mutex domains still serialize what they declare.
+- Source-variable timestamps are taken after the read handler returns.
+
 1.0.0 (2026-07-11)
 ------------------
 - Enforced security: user/password authentication (ServerConfig identity

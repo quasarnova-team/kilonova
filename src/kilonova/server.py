@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import inspect
 import logging
+from collections import Counter, deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -48,6 +51,8 @@ class Server:
         namespace_uri: str = "OPCUASERVER",  # the URI C++ quasar publishes at ns=2
         server_config_path: str | Path | None = None,
         users: dict[str, str] | None = None,
+        offload_workers: int = 8,
+        watchdog: float | None = 0.25,
     ) -> None:
         self._design_path = Path(design_path)
         self._config_path = Path(config_path) if config_path else None
@@ -64,6 +69,14 @@ class Server:
         self._source_specs: dict[str, object] = {}
         self._delegated_addresses: set[str] = set()
         self._domain_locks: dict[tuple, asyncio.Lock] = {}
+        if watchdog is not None and watchdog <= 0:
+            raise ValueError("watchdog must be a positive number of seconds, or None")
+        self._offload_workers = offload_workers
+        self._offload: ThreadPoolExecutor | None = None
+        self._watchdog_threshold = watchdog
+        self._watchdog_task: asyncio.Task | None = None
+        self._inflight: Counter = Counter()  # loop-run handlers, for watchdog blame
+        self._recent: deque = deque(maxlen=32)  # (label, started, ended) loop times
         self._initialized = False
 
     def _mutex_domain(self, domain: str, address: str, operation: str) -> tuple | None:
@@ -97,6 +110,103 @@ class Server:
         if lock is None:
             lock = self._domain_locks[key] = asyncio.Lock()
         return lock
+
+    async def offload(self, func, /, *args, **kwargs):
+        """Run a blocking callable in the server's thread pool and await its result.
+
+        For the blocking part of an otherwise-async handler::
+
+            @server.method("sca1.reset")
+            async def reset(obj):
+                await server.offload(driver.reset)   # blocking call, off the loop
+                await obj.setOnline(0)               # async part, on the loop
+        """
+        if self._offload is None:
+            self._offload = ThreadPoolExecutor(
+                max_workers=self._offload_workers, thread_name_prefix="kilonova-offload"
+            )
+        return await asyncio.get_running_loop().run_in_executor(
+            self._offload, functools.partial(func, *args, **kwargs)
+        )
+
+    async def _call_handler(self, handler, label: str, *args):
+        """Run one piece of device logic.
+
+        Coroutine handlers run on the event loop and must never block it; plain
+        functions run in the offload pool, so a blocking driver call delays this
+        one transaction — not every session, subscription and publish.
+        """
+        # not callable(): we detect coroutine callables (incl. async __call__)
+        run_on_loop = inspect.iscoroutinefunction(handler) or inspect.iscoroutinefunction(
+            getattr(handler, "__call__", None)  # noqa: B004
+        )
+        if run_on_loop:
+            loop = asyncio.get_running_loop()
+            self._inflight[label] += 1
+            started = loop.time()
+            try:
+                return await handler(*args)
+            finally:
+                self._inflight[label] -= 1
+                if self._inflight[label] <= 0:
+                    del self._inflight[label]
+                self._recent.append((label, started, loop.time()))
+        try:
+            result = await self.offload(handler, *args)
+        except RuntimeError as exc:
+            if "event loop" in str(exc):
+                _log.error(
+                    "%s: plain 'def' handlers run in a thread pool (since 1.1) and "
+                    "cannot use asyncio APIs — make the handler 'async def' (offload "
+                    "blocking parts via server.offload) or return the value instead",
+                    label,
+                )
+            raise
+        if inspect.isawaitable(result):  # e.g. a sync wrapper returning an awaitable
+            result = await result
+        return result
+
+    async def _watchdog_loop(self, threshold: float) -> None:
+        """Warn when the event loop stalls: a heartbeat measures its own lateness,
+        and loop-run handlers that overlapped a stall are named as suspects."""
+        interval = max(0.01, min(0.1, threshold / 2))
+        loop = asyncio.get_running_loop()
+        last_warned = float("-inf")
+        suppressed = 0
+        while True:
+            before = loop.time()
+            await asyncio.sleep(interval)
+            now = loop.time()
+            lag = now - before - interval
+            if lag < threshold:
+                continue
+            if now - last_warned < 5.0:  # cap warn rate; count what we swallow
+                suppressed += 1
+                continue
+            finished = sorted(
+                {
+                    label
+                    for label, started, ended in self._recent
+                    if ended > before and ended - started >= lag / 2
+                }
+            )
+            running = sorted(set(self._inflight) - set(finished))
+            parts = []
+            if finished:
+                parts.append(f"ran through the stall: {', '.join(finished)}")
+            if running:
+                parts.append(f"still in flight: {', '.join(running)}")
+            if suppressed:
+                parts.append(f"{suppressed} earlier stall(s) suppressed")
+            _log.warning(
+                "event loop stalled for %d ms — something blocked it%s; blocking "
+                "calls belong in plain 'def' handlers (kilonova runs those in its "
+                "thread pool) or behind server.offload(...)",
+                round(lag * 1000),
+                f" ({'; '.join(parts)})" if parts else "",
+            )
+            last_warned = now
+            suppressed = 0
 
     def method(self, address: str):
         """Register an async handler for a method node, by dotted address.
@@ -173,6 +283,7 @@ class Server:
         if params is None or not params.NodesToRead:
             return
         refreshed = set()
+        refreshes = []
         for read_value in params.NodesToRead:
             if read_value.AttributeId != ua.AttributeIds.Value:
                 continue
@@ -183,7 +294,13 @@ class Server:
             if handler is None:
                 continue
             refreshed.add(address)
-            await self._refresh_source_variable(address, handler)
+            refreshes.append(self._refresh_source_variable(address, handler))
+        if len(refreshes) == 1:
+            await refreshes[0]
+        elif refreshes:
+            # independent source variables refresh concurrently; the Design's
+            # mutex domains (inside each refresh) serialize what must serialize
+            await asyncio.gather(*refreshes)
 
     async def _refresh_source_variable(self, address: str, handler) -> None:
         spec = self._source_specs[address]
@@ -191,11 +308,9 @@ class Server:
         # domain "no" runs concurrently, as it does on the C++ server
         async with self._domain_lock(spec.read_use_mutex, address, "read"):
             owner = self.objects[address.rsplit(".", 1)[0]]
-            now = datetime.now(timezone.utc)
             try:
-                result = handler(owner)
-                if inspect.isawaitable(result):
-                    result = await result
+                result = await self._call_handler(handler, f"read {address}", owner)
+                now = datetime.now(timezone.utc)
                 if isinstance(result, ua.DataValue):
                     data_value = result
                 else:
@@ -216,14 +331,14 @@ class Server:
                 data_value = ua.DataValue(
                     ua.Variant(None, ua.VariantType.Null),
                     ua.StatusCode(exc.code),
-                    SourceTimestamp=now,
+                    SourceTimestamp=datetime.now(timezone.utc),
                 )
             except Exception:
                 _log.exception("source variable %s: read handler failed", address)
                 data_value = ua.DataValue(
                     ua.Variant(None, ua.VariantType.Null),
                     ua.StatusCode(ua.StatusCodes.BadInternalError),
-                    SourceTimestamp=now,
+                    SourceTimestamp=datetime.now(timezone.utc),
                 )
             await self.ua_server.iserver.aspace.write_attribute_value(
                 ua.NodeId(address, QUASAR_NAMESPACE_INDEX), ua.AttributeIds.Value, data_value
@@ -268,9 +383,7 @@ class Server:
                 write_domain = spec.write_use_mutex if spec is not None else "no"
                 try:
                     async with self._domain_lock(write_domain, address, "write"):
-                        outcome = handler(owner, value)
-                        if inspect.isawaitable(outcome):
-                            await outcome
+                        await self._call_handler(handler, f"write {address}", owner, value)
                 except ua.UaStatusCodeError as exc:
                     results.append(ua.StatusCode(exc.code))
                     continue
@@ -299,9 +412,10 @@ class Server:
                 return ua.StatusCode(ua.StatusCodes.BadTooManyArguments)
             arguments = [variant.Value for variant in variants]
             async with self._domain_lock(method.call_use_mutex, method_address, "call"):
-                result = handler(self.objects[parent_address], *arguments)
-                if inspect.isawaitable(result):
-                    result = await result
+                result = await self._call_handler(
+                    handler, f"method {method_address}",
+                    self.objects[parent_address], *arguments,
+                )
             returns = method.return_values
             if not returns:
                 return []
@@ -448,12 +562,30 @@ class Server:
 
     async def start(self) -> None:
         await self.init()
+        if self._offload is None:
+            self._offload = ThreadPoolExecutor(
+                max_workers=self._offload_workers, thread_name_prefix="kilonova-offload"
+            )
         await self.ua_server.start()
+        if self._watchdog_threshold is not None and self._watchdog_task is None:
+            self._watchdog_task = asyncio.get_running_loop().create_task(
+                self._watchdog_loop(self._watchdog_threshold)
+            )
         _log.info("kilonova: serving on %s", self._endpoint)
 
     async def stop(self) -> None:
+        if self._watchdog_task is not None:
+            self._watchdog_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._watchdog_task
+            self._watchdog_task = None
         if self.ua_server is not None:
             await self.ua_server.stop()
+        if self._offload is not None:
+            # after the transports are down, no request can queue new pool work;
+            # never wait: a stuck driver call must not hang server shutdown
+            self._offload.shutdown(wait=False, cancel_futures=True)
+            self._offload = None
 
     async def __aenter__(self) -> Server:
         await self.start()

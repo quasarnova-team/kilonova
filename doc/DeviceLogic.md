@@ -56,6 +56,38 @@ async def write_dac(obj, value):
 
 Until the first interaction a source variable serves `BadWaitingForInitialData`.
 
+Blocking device logic
+---------------------
+
+Two kinds of handlers, one rule:
+
+- **`async def`** — runs on the server's event loop. Never block in it: no vendor SDK
+  calls, no `time.sleep`, no synchronous sockets. One blocking call stalls every session.
+- **plain `def`** — kilonova runs it in its thread pool (`Server(offload_workers=8)`).
+  Blocking calls are safe here: a slow driver delays this one transaction, nothing else.
+
+```python
+@server.read("sca1.adc")
+def read_adc(obj):                         # plain def: offloaded, may block
+    return caen.read_voltage(slot=3)       # blocking vendor call — safe
+
+@server.method("sca1.reset")
+async def reset(obj):                      # mixed: offload only the blocking part
+    await server.offload(caen.reset)
+    await obj.setOnline(0)                 # async API — on the loop, as it must be
+```
+
+A plain-`def` handler runs off the loop, so it must not call async APIs (`set_cv`,
+setters) directly — return the value instead, or use the mixed style above. Independent
+source variables in one read transaction refresh concurrently; the Design's mutex
+domains still serialize exactly what they declare. Under domain `no`, two overlapping
+reads of the *same* variable may commit in either order (last writer wins) — declare
+`of_this_variable` if that matters, exactly as in C++.
+
+The server watches its own loop: if something blocks it longer than
+`Server(watchdog=0.25)` seconds, it logs a warning naming the device logic that was
+running (`watchdog=None` disables this).
+
 Delegated cache variables
 -------------------------
 
@@ -94,12 +126,13 @@ The Design's mutex declarations are honoured with asyncio locks: source-variable
 access per declared domain (`of_this_operation`, `of_this_variable` / `of_this_method`,
 `of_containing_object`, `of_parent_of_containing_object`); domain `no` runs concurrently,
 exactly as on the C++ server. `handpicked` means the framework applies no lock — you hold your own inside the
-handler, exactly as on the C++ server where the developer supplies the mutex.
+handler, exactly as on the C++ server where the developer supplies the mutex
+(in a plain-`def` handler that is a `threading.Lock`, not an `asyncio.Lock`).
 
 Method `executionSynchronicity` is parsed and both values behave like C++'s
-*asynchronous* mode by construction: handlers are awaited coroutines, so a slow method
-never blocks the server loop, and the client's Call completes when the handler finishes
-(C++'s `finishCall`).
+*asynchronous* mode by construction: handlers are awaited coroutines or pool-offloaded
+functions, so a slow method never blocks the server loop, and the client's Call
+completes when the handler finishes (C++'s `finishCall`).
 
 Server configuration
 --------------------

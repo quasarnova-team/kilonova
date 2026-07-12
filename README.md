@@ -41,6 +41,10 @@ server = Server("Design.xml", config_path="config.xml")
 async def read_adc(obj):
     return await hardware.read_adc()
 
+@server.read("sca1.temperature")         # plain def: kilonova runs it in its thread
+def read_temperature(obj):               # pool, so blocking drivers cannot stall
+    return caen.read_temperature()       # the server
+
 @server.method("sca1.reset")             # method handler
 async def reset(obj):
     await obj.setOnline(0)               # generated setter, quasar naming
@@ -66,7 +70,8 @@ Limitations
   skeleton (that is the point).
 - Design-mandated children are instantiated unconditionally; C++ device logic may create
   some conditionally.
-- No server-side security policies yet (NoSecurity endpoint only).
+- Security: user/password logon and Basic256Sha256 policies via ServerConfig.xml;
+  client-certificate trust lists are not supported yet.
 - Values live in asyncua's address space; extreme write rates were not a design goal.
 
 Documentation
@@ -91,7 +96,7 @@ Interface stability
 
 From 1.0.0, kilonova follows semantic versioning. The public API is
 `kilonova.Server` (constructor arguments, `objects`, the `method`/`read`/`write`
-decorators), `kilonova.Design`, `QuasarObject` (`set_cv`/`get_cv`/generated setters)
+decorators, `offload`), `kilonova.Design`, `QuasarObject` (`set_cv`/`get_cv`/generated setters)
 and the exceptions in `kilonova.errors`. Anything imported from other modules is
 internal. Breaking changes get a deprecation release first.
 

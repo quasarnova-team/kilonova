@@ -18,6 +18,8 @@
 - Independent source variables in one read transaction now refresh
   concurrently; Design mutex domains still serialize what they declare.
 - Source-variable timestamps are taken after the read handler returns.
+- PyPI Development Status reclassified Stable -> Beta: honest staging until
+  there is external production use (the 1.0.0 entry below predates this).
 
 1.0.0 (2026-07-11)
 ------------------

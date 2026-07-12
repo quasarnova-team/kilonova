@@ -17,8 +17,8 @@ Honest and short. Dates are intentions, not promises; the
 ## The wider family
 
 - **supernova** (C++ engine, [repo](https://github.com/quasarnova-team/supernova)):
-  OPC UA Pub/Sub (publisher + subscriber) on both supported stacks. In development;
-  first tagged release gated on clean-machine buildability, complete Pub/Sub docs and
-  a 60-second demo.
+  OPC UA Pub/Sub (publisher + subscriber, UADP over UDP) on both supported stacks —
+  released (v1.1.0, arrays included). Hardening gates (clean-machine buildability,
+  end-to-end tutorial, 60-second demo, migration note) tracked in its milestone.
 - **dwarfnova** (typed client generation) and **rednova** (SCADA integration):
   design-stage ideas, no code yet. They will not be promoted until they exist.

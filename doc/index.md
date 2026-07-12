@@ -1,12 +1,15 @@
 # kilonova
 
-Pure-Python OPC UA servers from quasar Design files — the
-[quasarnova](https://quasarnova-team.github.io/) family's no-codegen engine.
+Describe your device once in a declarative XML model; kilonova serves it as a complete,
+standards-compliant OPC UA server — in pure Python, with no code generation, no compiler
+and no build step. It is the Python engine of the
+[quasarnova](https://quasarnova-team.github.io/) family and is fully compatible with
+Design files from the quasar framework: same `Design.xml` + `config.xml`, same address
+space — same NodeIds, same types, same behaviour. The upstream framework's complete
+public conformance suite passes on every commit, on three operating systems.
 
-kilonova takes the same `Design.xml` + `config.xml` a C++ quasar server consumes and
-serves the same OPC UA address space — same NodeIds, same types, same behaviour — with
-no generator, no compiler and no build step. It passes the upstream quasar framework's
-complete public conformance suite, on every commit, on three operating systems.
+Built for the jobs where a server must exist *now*: device simulators, test rigs,
+FAT/SAT stand-ins, CI test doubles, edge gateways and reference implementations.
 
 ## Install
 

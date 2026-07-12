@@ -49,4 +49,4 @@
 - 12/12 oracle parity with quasar's own CI test suite.
 - Async device logic (@server.method/read/write), calculated variables,
   StandardMetaData, config restrictions, cardinality validation.
-- Verified against live production C++ servers (ATCA, CAEN, CanOpen).
+- Verified against live C++ servers built from three real production-grade designs.

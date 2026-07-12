@@ -1,0 +1,27 @@
+name: Feature request
+description: Something kilonova should do (or a quasar feature it should match)
+labels: [enhancement]
+body:
+  - type: textarea
+    id: job
+    attributes:
+      label: What job are you trying to do?
+      description: The task, not the solution — simulators, test rigs, gateways, ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should kilonova do?
+    validations:
+      required: true
+  - type: dropdown
+    id: parity
+    attributes:
+      label: Is this a parity gap with the C++ quasar framework?
+      options:
+        - "Yes — C++ quasar does this and kilonova doesn't"
+        - "No — new capability"
+        - "Not sure"
+    validations:
+      required: true

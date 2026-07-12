@@ -26,20 +26,18 @@ mutually contradictory meta snapshots).
 
 Current status: **12/12 cases PASS.**
 
-Gate 2: live production servers
--------------------------------
+Gate 2: live servers from real designs
+--------------------------------------
 
-The `.parity-night` campaign (a local campaign workspace, not part of this repository)
-compares probes of real servers. kilonova runs as a third backend column, no docker/build:
+A local cross-backend probe harness (a campaign workspace, not part of this repository)
+compares client-side probes of live servers built from real production-grade designs.
+kilonova runs as a third backend column next to the two C++ backends — no docker, no
+build step.
 
-```
-bash .parity-night/scripts/run_kilonova_cell.sh <cell> <server-src> <config.xml> <port>
-python3 .parity-night/scripts/compare.py cells/<a>/probe.json cells/<b>/probe.json
-```
-
-Results (2026-07-11): ATCA and CAEN at full structural parity vs both live C++ backends;
-CanOpen surfaced two genuine cross-backend deltas (method-argument AccessLevel: kilonova
-agrees with UASDK; FreeVariable writability: kilonova agrees with open62541).
+Results (2026-07-11), across three real designs: two at full structural parity vs both
+live C++ backends; the third surfaced two genuine cross-backend deltas between the C++
+backends themselves (method-argument AccessLevel: kilonova agrees with one backend;
+FreeVariable writability: kilonova agrees with the other).
 
 Expected, accepted differences
 ------------------------------
@@ -54,10 +52,11 @@ Expected, accepted differences
 Ecosystem cross-checks
 ----------------------
 
-- Cacophony: `tools/cacophony_crosscheck.py` verifies every periphery address the
-  generated `configParser.ctl` would assign resolves on a live kilonova —
-  600/600 on the production ATCA design.
-- UaoForQuasar: proven live (2026-07-11). A generated C++ client, compiled against the
-  commercial UASDK in the production el9 image, connected to kilonova serving the ATCA
-  design and read back a value set by python device logic (tools/uao_client_check).
-  The remaining ecosystem leg is a live WinCC OA connection, which needs lab access.
+- Cacophony (WinCC OA address generation): `tools/cacophony_crosscheck.py` verifies
+  every periphery address the generated `configParser.ctl` would assign resolves on a
+  live kilonova — 600/600 addresses on a large real-world design.
+- UaoForQuasar (generated C++ clients): a generated client class, compiled against a
+  UA-SDK-compatible stack, connected to a live kilonova and read back a value set by
+  Python device logic (harness preserved in `tools/uao_client_check`).
+- A direct live WinCC OA connection has not been exercised yet; the Cacophony address
+  cross-check above covers the address layer WinCC OA subscribes through.

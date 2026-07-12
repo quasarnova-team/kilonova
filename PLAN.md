@@ -39,7 +39,7 @@ with `Design.xml` + `config.xml` + `reference_ns2.xml`. The gate (same semantics
 | M10 | StandardMetaData subtree | default_design case passes un-ignored | done |
 | M11 | Config restrictions + cardinality validation | invalid config rejected like C++ Configurator | done |
 | M12 | Ecosystem smoke: UaoForQuasar client + Cacophony against kilonova | generated client works unmodified | done (local legs) |
-| M13 | parity-night third backend column (production servers) | probe parity vs live C++ backends | done — ATCA/CAEN full structural parity; CanOpen surfaced 2 cross-backend quirks (see .parity-night/cells/*-kilonova/deps-note.txt) |
+| M13 | Cross-backend probe column (live servers from real designs) | probe parity vs live C++ backends | done — two designs at full structural parity; a third surfaced 2 genuine cross-backend quirks (documented in doc/Parity.md) |
 | M14 | Blocking device logic: plain-`def` handlers offloaded to a thread pool; loop watchdog; parallel source refresh in one read | contrast test pair: an offloaded blocking driver stalls nothing; the same call on the loop is detected and named | done (v1.1.0) |
 
 ## Current parity table (M6 gate; StandardMetaData compared in full for default_design, ignored elsewhere — like quasar's own CI)
@@ -84,11 +84,11 @@ Any null/bad input yields BadWaitingForInitialData. **All 12 quasar CI oracle ca
 M12 (ecosystem smoke, local legs — 2026-07-11): Cacophony generates its WinCC OA CTRL
 artifacts cleanly from kilonova-served designs, and `tools/cacophony_crosscheck.py`
 verifies every periphery address the generated configParser.ctl would assign resolves on a
-live kilonova server: 8/8 on the SCA demo, **600/600 on the production ATCA design**.
-UaoForQuasar client classes generate cleanly for production classes (Manager/Board/FanTray)
+live kilonova server: 8/8 on the SCA demo, **600/600 on a large real-world design**.
+UaoForQuasar client classes generate cleanly for real production-grade classes
 and their generated NodeId construction (`parentId + ".var"`, parent namespace) is exactly
-kilonova's addressing. Deferred: compiling/running the generated C++ client (needs UASDK
-— a docker parity-image job, natural follow-up in the parity-night campaign).
+kilonova's addressing. Deferred: compiling/running the generated C++ client (needs a UA SDK
+toolchain; completed later — see tools/uao_client_check).
 
 ## Design decisions (2026 rewrite, vs the 2021 MilkyWay prototype)
 
@@ -148,4 +148,4 @@ Known deliberate residuals (each warns loudly at runtime where relevant):
 - mutex domain `handpicked` — implemented with C++ semantics: the framework applies no lock; the handler holds its own (v1.0.0).
 - ServerConfig PKI trust/revocation lists, session/subscription limits, tracing — logged
   as unsupported when configured.
-- UaoForQuasar C++ client: PROVEN LIVE (v1.0.0, tools/uao_client_check) — compiled against UASDK in the el9 image, read a value python device logic set. Remaining external leg: a live WinCC OA connection (lab).
+- UaoForQuasar C++ client: PROVEN LIVE (v1.0.0, tools/uao_client_check) — a generated client, compiled in a UA SDK toolchain image, read a value python device logic set. Remaining external leg: a direct live WinCC OA connection.

@@ -1,0 +1,40 @@
+name: Bug report
+description: Something behaves differently than documented (or than the C++ framework)
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Design.xml / config.xml (minimal)
+      description: >
+        If the issue involves the served address space, a minimal Design + config that
+        reproduces it makes the fix 10x faster. Paste inline or attach.
+      render: xml
+  - type: input
+    id: version
+    attributes:
+      label: kilonova version
+      placeholder: pip show kilonova
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS and Python version
+      placeholder: e.g. Ubuntu 24.04, Python 3.12
+    validations:
+      required: true
+  - type: textarea
+    id: parity
+    attributes:
+      label: Parity context (optional)
+      description: >
+        If the C++ quasar framework does something different with the same Design,
+        say what — parity reports are treated as first-class bugs.

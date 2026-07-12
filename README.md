@@ -1,6 +1,7 @@
 # kilonova
 
 [![CI](https://github.com/quasarnova-team/kilonova/actions/workflows/ci.yml/badge.svg)](https://github.com/quasarnova-team/kilonova/actions/workflows/ci.yml)
+[![docs](https://img.shields.io/badge/docs-quasarnova--team.github.io%2Fkilonova-blue)](https://quasarnova-team.github.io/kilonova/)
 
 What is this?
 -------------

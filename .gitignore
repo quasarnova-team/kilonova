@@ -11,3 +11,4 @@ build/
 uv.lock
 dump*.xml
 dist/
+site/

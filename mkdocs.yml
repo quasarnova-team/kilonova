@@ -1,0 +1,54 @@
+site_name: kilonova
+site_description: Pure-Python OPC UA servers from quasar Design files — no code generation.
+site_url: https://quasarnova-team.github.io/kilonova/
+repo_url: https://github.com/quasarnova-team/kilonova
+repo_name: quasarnova-team/kilonova
+docs_dir: doc
+copyright: "© 2026 the quasarnova team"
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+  features:
+    - navigation.sections
+    - navigation.footer
+    - content.code.copy
+  icon:
+    logo: material/star-four-points
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Device logic: DeviceLogic.md
+  - Architecture: Architecture.md
+  - Calculated variables: CalculatedVariables.md
+  - Parity: Parity.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/quasarnova-team
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/kilonova/

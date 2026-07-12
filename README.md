@@ -101,8 +101,8 @@ quasarnova builds on the lineage of the open-source
 [quasar framework](https://github.com/quasar-team/quasar), developed at CERN and running
 large-scale control systems for more than a decade. quasarnova is an independent project
 and is not affiliated with or endorsed by CERN. The Design-driven approach and the
-MilkyWay prototype are due to the upstream quasar project and its authors (Piotr Nikiel
-and the quasar team).
+[MilkyWay](https://github.com/quasar-team/MilkyWay) prototype are due to the upstream
+quasar project and its authors.
 
 Interface stability
 -------------------
